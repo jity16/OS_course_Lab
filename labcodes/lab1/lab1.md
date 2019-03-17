@@ -346,18 +346,48 @@ buf[511] = 0xAA;		//结尾两个字节的内容
 
 #### （二）练习二
 
-2.1
+##### 【练习2.1】
 
+> 从CPU加电后执行的第一条指令开始，单步跟踪BIOS的执行
+
+（1）将`tools/gdbinit`的内容修改为：
+
+~~~makefile
+target remote :1234
+set architecture i8086
 ~~~
+
+`target remote :1234` 此行是为了与`qemu`进行`TCP/IP`连接
+
+`set architecture i8086` 此行是`CPU`加电时，`BIOS`进入的是`8086`的实模式
+
+（2）在`lab1`目录下执行命令`make debug`
+
+我们发现程序停止在第一条指令处，显示内容为：
+
+~~~makefile
 0x0000fff0 in ?? ()
-warning: A handler for the OS ABI "GNU/Linux" is not built into this configuratio
-n
-of GDB.  Attempting to continue with the default i8086 settings.
-
-The target architecture is assumed to be i8086
-(gdb) x /i $cs*16 + $pc
-   0xffff0:     ljmp   $0xf000,$0xe05b
 ~~~
+
+但我们所设想的`bootloader`第一条指令位置是`0x7c00`，而不是`0xfff0`
+
+原因是：`gdb`只显示当前`PC`的值，而没有考虑`CS`段寄存器中的`Base`内容
+
+因此，我们要查看`CPU`加电后第一条指令，需要对当前`PC`值加上`CS`寄存器的`Base`
+
+（3）在`gdb`中输入如下命令
+
+~~~makefile
+(gdb) x /i $cs*16 + $pc
+~~~
+
+屏幕输出的结果是：
+
+~~~makefile
+0xffff0:     ljmp   $0xf000,$0xe05b
+~~~
+
+我们知道通常第一条指令是一条长跳转指令到`BIOS`代码中执行，这里屏幕输出的是`ljmp`是长跳转指令，符合规律。
 
 
 
