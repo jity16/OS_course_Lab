@@ -346,3 +346,18 @@ buf[511] = 0xAA;		//结尾两个字节的内容
 
 #### （二）练习二
 
+2.1
+
+~~~
+0x0000fff0 in ?? ()
+warning: A handler for the OS ABI "GNU/Linux" is not built into this configuratio
+n
+of GDB.  Attempting to continue with the default i8086 settings.
+
+The target architecture is assumed to be i8086
+(gdb) x /i $cs*16 + $pc
+   0xffff0:     ljmp   $0xf000,$0xe05b
+~~~
+
+
+
