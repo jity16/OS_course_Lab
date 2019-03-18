@@ -389,5 +389,61 @@ set architecture i8086
 
 我们知道通常第一条指令是一条长跳转指令到`BIOS`代码中执行，这里屏幕输出的是`ljmp`是长跳转指令，符合规律。
 
+（4）在`gdb`中输入如下命令`stepi`或者`si`
 
+可以单步跟踪：
+
+~~~makefile
+(gdb) si
+0x0000e05b in ?? ()
+(gdb) stepi
+0x0000e062 in ?? ()
+~~~
+
+
+
+##### 【练习2.2】
+
+> 初始化位置0x7c00设置实地址断点,测试断点正常。
+
+在上一题的基础上在`tools/gdbinit`中加上一行：
+
+~~~makefile
+b	*0x7c00
+~~~
+
+这句是在实地址`0x7c00`处设置断点，此地址是`bootloader`第一条指令位置即入口地址
+
+在`lab1`目录下执行命令`make debug`，得到屏幕输出结果：
+
+~~~makefile
+Breakpoint 1 at 0x7c00
+~~~
+
+设置断点成功，我们来测试断点是否正常
+
+在`tools/gdbinit`中加上以下几行：
+
+~~~makefile
+continue		#继续执行
+x /2i $pc		#显示下面两条指令
+set architecture i386	#设置当前调试的CPU是80386
+~~~
+
+屏幕中显示出：
+
+~~~makefile
+Breakpoint 1, 0x00007c00 in ?? ()
+=> 0x7c00:      cli    
+   0x7c01:      cld    
+The target architecture is assumed to be i386
+~~~
+
+断点测试正常
+
+
+
+##### 【练习2.3】
+
+> 从0x7c00开始跟踪代码运行,将单步跟踪反汇编得到的代码与bootasm.S和 bootblock.asm进行比较。
 
