@@ -1,4 +1,4 @@
-> 计64	嵇天颖	2016010308
+计64	嵇天颖	2016010308
 
 ## Lab 1    
 
@@ -775,4 +775,231 @@ call bootmain
 > 如何使能和进入保护模式
 
 将cr0寄存器的PE位（cr0寄存器的最低位）设置为1，便使能和进入保护模式了。
+
+
+
+---
+
+### （四）练习四
+
+> 分析`bootloader`加载`ELF`格式的`OS`的过程
+>
+> 通过阅读`bootmain.c`，了解`bootloader`如何加载`ELF`文件。通过分析源代码和通过`qemu`来运行并调试`bootloader`&`OS`，理解：
+>
+> 1. `bootloader`如何读取硬盘扇区的？
+> 2. `bootloader`是如何加载ELF格式的OS？
+
+`bootloader`完成进入保护模式的工作后，由于`kernel`是以`ELF`形式存储在硬盘上，所以我们需要`bootloader`能够加载`ELF`格式的`OS`, 主要分为两个步骤：（1）读取硬盘扇区；（2）读取硬盘扇区数据后能够分析出`ELF`格式。
+
+#### 【第一问】
+
+> `bootloader`如何读取硬盘扇区的？
+
+在`bootmain.c`中，用`readsect`函数实现了读取硬盘扇区的功能。
+
+**STEP1**	等待磁盘空闲
+
+~~~c
+/* readsect - read a single sector at @secno into @dst */
+static void
+readsect(void *dst, uint32_t secno) {
+    // wait for disk to be ready
+    waitdisk();
+~~~
+
+`waitdisk`的函数实现只有一行,即不断查询读`0x1F7`寄存器的最高两位，直到最高位为0，并且次高位为1（即磁盘空闲）返回。
+
+~~~c
+static void
+waitdisk(void) {
+    while ((inb(0x1F7) & 0xC0) != 0x40)
+        /* do nothing */;
+}
+~~~
+
+**STEP2**	硬盘空闲后，发出读取扇区的命令
+
+设置读取扇区的数目为1
+
+~~~c
+ outb(0x1F2, 1);                         // count = 1
+~~~
+
+读取的扇区起始编号共28位，分成4部分依次放在0x1F3~0x1F6寄存器中。
+
+其中调用的`outb`函数是采用内联汇编实现，采用了`IO`寻址方式，可以读取外设数据。
+
+~~~c
+static inline void
+outb(uint16_t port, uint8_t data) {
+    asm volatile ("outb %0, %1" :: "a" (data), "d" (port));
+}
+~~~
+
+在这4个字节线联合构成的32位参数中，29-31位强制设为1，28位(=0)表示访问"Disk 0"，0-27位是28位的偏移量。
+
+~~~c
+outb(0x1F3, secno & 0xFF);
+outb(0x1F4, (secno >> 8) & 0xFF);
+outb(0x1F5, (secno >> 16) & 0xFF);
+outb(0x1F6, ((secno >> 24) & 0xF) | 0xE0);
+~~~
+
+读扇区对应的命令字为0x20，放在0x1F7寄存器中；
+
+~~~c
+outb(0x1F7, 0x20);                      // cmd 0x20 - read sectors
+~~~
+
+**STEP3**	发出命令后，再次等待硬盘空闲
+
+~~~c
+// wait for disk to be ready
+waitdisk();
+~~~
+
+**STEP4** 	硬盘再次空闲后，开始从`0x1F0`寄存器中读数据
+
+调用了`insl`函数，也是采用内联汇编实现，在`libs/x86.h`中
+
+~~~C
+static inline void
+insl(uint32_t port, void *addr, int cnt) {
+    asm volatile (
+            "cld;"
+            "repne; insl;"
+            : "=D" (addr), "=c" (cnt)
+            : "d" (port), "0" (addr), "1" (cnt)
+            : "memory", "cc");
+}
+~~~
+
+`insl`的是以dword即4字节为单位的，因此这里SECTIZE需要除以4.
+
+~~~c
+    // read a sector
+    insl(0x1F0, dst, SECTSIZE / 4);
+}
+~~~
+
+
+
+#### 【第二问】
+
+> `bootloader`是如何加载`ELF`格式的`OS`？
+
+**STEP1** 	
+
+首先从硬盘中将`bin/kernel`文件的第一页内容加载到内存地址为`0x10000`的位置，目的是读取`kernel`文件的`ELF Header`信息。
+
+~~~c
+/* bootmain - the entry of bootloader */
+void
+bootmain(void) {
+    // read the 1st page off disk
+    readseg((uintptr_t)ELFHDR, SECTSIZE * 8, 0);
+~~~
+
+其中调用的的`readseg`函数包装了`readsect`，可以读取`kernel`中任意长度的内容写入虚拟地址中
+
+~~~c
+static void
+readseg(uintptr_t va, uint32_t count, uint32_t offset) {
+    uintptr_t end_va = va + count;
+    // round down to sector boundary
+    va -= offset % SECTSIZE;
+    // translate from bytes to sectors; kernel starts at sector 1
+    uint32_t secno = (offset / SECTSIZE) + 1;
+    // If this is too slow, we could read lots of sectors at a time.
+    // We'd write more to memory than asked, but it doesn't matter --
+    // we load in increasing order.
+    for (; va < end_va; va += SECTSIZE, secno ++) {
+        readsect((void *)va, secno);
+    }
+}
+~~~
+
+**STEP2**
+
+校验`ELF Header`的`e_magic`字段，以确保这是一个`ELF`文件
+
+~~~c
+// is this a valid ELF?
+if (ELFHDR->e_magic != ELF_MAGIC) {
+goto bad;
+}
+~~~
+
+**STEP3**
+
+`ELF`头部有描述`ELF`文件应加载到内存什么位置的描述表，先将描述表的头地址存在`ph`.然后按照描述表将`ELF`文件中数据载入内存。
+
+**Program Header**
+
+由于该过程中涉及到程序头表`program header`，我们先分析程序头表的结构体，在`libs/elf.h`中：
+
+程序头表的每个成员分别记录一个`Segment`的信息，以下是加载需要用到的信息：
+
+`uint32_t p_offset`是 段相对文件头的偏移值，由此可知怎么从文件中找到该`Segment`
+
+`uint va` 是 段的第一个字节将被放到内存中的虚拟地址，由此可知要将该`Segment`加载到内存中哪个位置
+
+`uint memsz` 是 段在内存映像中占用的字节数，由此可知要加载多少内容
+
+~~~c
+/* program section header */
+struct proghdr {
+    uint32_t p_type;   // loadable code or data, dynamic linking info,etc.
+    uint32_t p_offset; // file offset of segment
+    uint32_t p_va;     // virtual address to map segment
+    uint32_t p_pa;     // physical address, not used
+    uint32_t p_filesz; // size of segment in file
+    uint32_t p_memsz;  // size of segment in memory (bigger if contains bss）
+    uint32_t p_flags;  // read/write/execute bits
+    uint32_t p_align;  // required alignment, invariably hardware page size
+};
+~~~
+
+
+
+（1）读取`ELF Header`的`e_phoff`字段，得到`Program Header`表的起始地址；
+
+**原因：**`ELF Header`里面含有`phoff`字段，用于记录`program header`表在文件中的偏移，由该字段可以找到程序头表的起始地址。
+
+~~~c
+struct proghdr *ph, *eph;
+
+// load each program segment (ignores ph flags)
+ph = (struct proghdr *)((uintptr_t)ELFHDR + ELFHDR->e_phoff);
+~~~
+
+（2）读取`ELF Header`的`e_phnum`字段，得到`Program Header`表的元素数目。
+
+**原因：**程序头表是一个结构体数组，其元素数目记录在`ELF Header`的`phnum`字段中。
+
+~~~c
+eph = ph + ELFHDR->e_phnum;
+~~~
+
+（3）遍历`Program Header`表中的每个元素，得到每个`Segment`在文件中的偏移、要加载到内存中的位置（虚拟地址）及`Segment`的长度等信息，并通过磁盘`I/O`进行加载
+
+~~~C
+for (; ph < eph; ph ++) {
+	readseg(ph->p_va & 0xFFFFFF, ph->p_memsz, ph->p_offset);
+}
+~~~
+
+**STEP4**
+
+加载完毕，通过`ELF Header`的`e_entry`得到内核的入口地址，并跳转到该地址开始执行内核代码
+
+~~~C
+((void (*)(void))(ELFHDR->e_entry & 0xFFFFFF))();
+~~~
+
+
+
+---
+
+
 
