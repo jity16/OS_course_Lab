@@ -344,9 +344,9 @@ buf[511] = 0xAA;		//结尾两个字节的内容
 
 ---
 
-#### （二）练习二
+### （二）练习二
 
-##### 【练习2.1】
+#### 【练习2.1】
 
 > 从CPU加电后执行的第一条指令开始，单步跟踪BIOS的执行
 
@@ -402,7 +402,7 @@ set architecture i8086
 
 
 
-##### 【练习2.2】
+#### 【练习2.2】
 
 > 初始化位置0x7c00设置实地址断点,测试断点正常。
 
@@ -443,7 +443,336 @@ The target architecture is assumed to be i386
 
 
 
-##### 【练习2.3】
+#### 【练习2.3】
 
 > 从0x7c00开始跟踪代码运行,将单步跟踪反汇编得到的代码与bootasm.S和 bootblock.asm进行比较。
+
+（1）修改`lab1/tools/gdbinit`
+
+~~~makefile
+file bin/kernel				#加载kernel
+set architecture i8086		#进入8086的16位实模式
+target remote :1234			#与qemu进行TCP/IP连接
+break kern_init				
+continue
+b *0x7c00
+c
+x /10i $pc					#输出十条指令
+~~~
+
+（2）修改Makefile`中`qemu`
+
+~~~makefile
+qemu: $(UCOREIMG) $(V)$(QEMU) -no-reboot -d in_asm -D q.log -parallel stdio -hda $< -serial null 		#增加的参数用来将运行的汇编指令保存在q.log中
+~~~
+
+（3）我们运行`make qemu`获得的结果保存在`q.log`中：
+
+摘录`q.log`其中一部分如下：
+
+~~~makefile
+----------------
+IN: 
+0xfffffff0:  ljmp   $0xf000,$0xe05b
+
+----------------
+IN: 
+0x000fe05b:  cmpl   $0x0,%cs:0x65a4
+0x000fe062:  jne    0xfd2b9
+
+----------------
+IN: 
+0x000fe066:  xor    %ax,%ax
+0x000fe068:  mov    %ax,%ss
+
+----------------
+IN: 
+0x000fe06a:  mov    $0x7000,%esp
+
+----------------
+IN: 
+0x000fe070:  mov    $0xf3c4f,%edx
+0x000fe076:  jmp    0xfd12a
+
+----------------
+IN: 
+0x000fd12a:  mov    %eax,%ecx
+0x000fd12d:  cli    
+0x000fd12e:  cld    
+0x000fd12f:  mov    $0x8f,%eax
+0x000fd135:  out    %al,$0x70
+0x000fd137:  in     $0x71,%al
+0x000fd139:  in     $0x92,%al
+0x000fd13b:  or     $0x2,%al
+0x000fd13d:  out    %al,$0x92
+0x000fd13f:  lidtw  %cs:0x66c0
+0x000fd145:  lgdtw  %cs:0x6680
+0x000fd14b:  mov    %cr0,%eax
+0x000fd14e:  or     $0x1,%eax
+0x000fd152:  mov    %eax,%cr0
+
+----------------
+IN: 
+0x000fd155:  ljmpl  $0x8,$0xfd15d
+
+----------------
+IN: 
+0x000fd15d:  mov    $0x10,%eax
+0x000fd162:  mov    %eax,%ds
+
+----------------
+IN: 
+0x000fd164:  mov    %eax,%es
+
+----------------
+IN: 
+0x000fd166:  mov    %eax,%ss
+
+# ............
+~~~
+
+将上述代码与bootasm.S和bootblock.asm比较，发现汇编指令相同。 
+
+
+
+#### 【练习2.4】
+
+> 自己找一个bootloader或内核中的代码位置，设置断点并进行测试
+
+（1）修改`tools/gdbinit`为：
+
+~~~makefile
+file bin/kernel
+set architecture i8086
+target remote :1234
+break kern_init
+continue
+break clock_init		#将断点设置在clock_init
+c
+x /10i	$pc
+~~~
+
+（2）命令行输入`make debug`，得到的结果
+
+~~~makefile
+Breakpoint 2, clock_init () at libs/x86.h:57
+=> 0x100cbf <clock_init+16>:    movzbw -0xb(%di),%ax
+   0x100cc3 <clock_init+20>:    movzww -0xa(%di),%dx
+   0x100cc7 <clock_init+24>:    out    %al,(%dx)
+   0x100cc8 <clock_init+25>:    movl   $0x45c60040,-0xe(%di)
+   0x100cd0 <clock_init+33>:    icebp  
+   0x100cd1 <clock_init+34>:    pushf  
+~~~
+
+
+
+---
+
+### （三）练习三
+
+> BIOS将通过读取硬盘主引导扇区到内存，并转跳到对应内存中的位置执行bootloader。请分析bootloader是如何完成从实模式进入保护模式的。
+
+#### （1）整体过程
+
+进入`bootloader`时，`CPU`处于16位的实模式，要使`CPU`进入32位的寻址空间，进入保护模式，`bootloader`要完成以下几个步骤：
+
+* 取消A20机制——为了使得CPU在32位模式下能够寻址全部内存。
+
+* 初始化GDT表——为了帮助CPU确认段机制映射的方法。
+
+* 使能CR0寄存器PE位，跳转到32位地址——为了完成保护模式的转换。
+
+
+
+#### （2）代码分析
+
+为了了解具体的执行过程，我们阅读`bootasm.S`中第12行至第56行的内容，以及全局描述符表，下面是对代码的具体分析
+
+（1）从`cs = 0` &&` ip = 0x7c00`进入`bootloader`启动过程，
+
+~~~makefile
+# start address should be 0:7c00, in real mode, the beginning address of the running bootloader
+.globl start
+start:
+~~~
+
+启动进入`bootloader`先要对环境进行清理：
+
+`cli` 先关闭了中断使能
+
+`cld` 使方向标志位复位
+
+~~~makefile
+.code16                                             # Assemble for 16-bit mode
+    cli                                             # Disable interrupts
+    cld                                             # String operations increment
+~~~
+
+清空段寄存器：
+
+~~~makefile
+# Set up the important data segment registers (DS, ES, SS).
+    xorw %ax, %ax                                   # Segment number zero
+    movw %ax, %ds                                   # -> Data Segment
+    movw %ax, %es                                   # -> Extra Segment
+    movw %ax, %ss                                   # -> Stack Segment
+~~~
+
+（2）开启`A20`, 以便能够通过总线访问更大的内存空间。
+
+​	这里通过使能全部的32条地址线，我们可以访问`4G`的内存空间。代码分为`seta20.1`和`seta20.2`两部分，其中`seta20.1`是往端口`0x64`写数据`0xd1`，告诉`CPU`我要往`8042`芯片的`P2`端口写数据；`seta20.2`是往端口`0x60`写数据`0xdf`，从而将`8042`芯片的`P2`端口设置为1。 两段代码都需要先读`0x64`端口的第2位，确保输入缓冲区为空后再进行后续写操作。
+
+**seta20.1**
+
+首先等待`8042 Input buffer`为空
+
+~~~makefile
+seta20.1:
+    inb $0x64, %al                                  # Wait for not busy(8042 input buffer empty).
+    testb $0x2, %al
+    jnz seta20.1
+~~~
+
+然后发送`Write 8042 Output Port(P2)`命令到`8042 Input buffer`
+
+~~~makefile
+ movb $0xd1, %al                                 # 0xd1 -> port 0x64
+ outb %al, $0x64                                 # 0xd1 means: write data to 8042's P2 port
+~~~
+
+**seta20.2**
+
+首先等待`8042 Input buffer`为空
+
+~~~makefile
+seta20.2:
+    inb $0x64, %al                                  # Wait for not busy(8042 input buffer empty).
+    testb $0x2, %al
+    jnz seta20.2
+~~~
+
+然后将`8042 Output Port（P2）`得到字节的第2位置1，然后写入`8042 Input buffer`
+
+~~~makefile
+movb $0xdf, %al                                 # 0xdf -> port 0x60
+outb %al, $0x60                                 # 0xdf = 11011111, means set P2's A20 bit(the 1 bit) to 1
+~~~
+
+（3）初始化`gdt`表
+
+`bootasm.S`中的`lgdt gdtdesc`把全局描述符表的大小和起始地址共`8`个字节加载到全局描述符表寄存器`GDTR`中。
+
+~~~makefile
+lgdt gdtdesc
+~~~
+
+从代码中可以看到全局描述符表的大小为`0x17 + 1 = 0x18`，也就是`24`字节。
+
+~~~makefile
+gdtdesc:
+    .word 0x17                                      # sizeof(gdt) - 1
+    .long gdt                                       # address gdt
+~~~
+
+全局描述符表的具体内容如下:
+
+全局描述符表每项大小为`8`字节，因此一共有`3`项，而第一项是空白项，所以全局描述符表中只有两个有效的段描述符，分别对应代码段和数据段。
+
+~~~makefile
+// Bootstrap GDT
+.p2align 2                                          # force 4 byte alignment
+gdt:
+    SEG_NULLASM                                     # null seg
+    SEG_ASM(STA_X|STA_R, 0x0, 0xffffffff)           # code seg for bootloader and kernel
+    SEG_ASM(STA_W, 0x0, 0xffffffff)                 # data seg for bootloader and kernel
+~~~
+
+其中`SEG_ASM`的定义如下：
+
+~~~makefile
+#define SEG_ASM(type,base,lim)                                  \
+    .word (((lim) >> 12) & 0xffff), ((base) & 0xffff);          \
+    .byte (((base) >> 16) & 0xff), (0x90 | (type)),             \
+        (0xC0 | (((lim) >> 28) & 0xf)), (((base) >> 24) & 0xff)
+~~~
+
+通过将`CR0`寄存器的`PE`位置`1`开启保护模式：
+
+~~~makefile
+movl %cr0, %eax
+orl $CR0_PE_ON, %eax
+movl %eax, %cr0
+~~~
+
+切换至保护模式后，`CS`将作为段选择子被使用，其含义发生了变化
+这里通过`ljmp`指令来对`CS`的值进行更新
+
+~~~makefile
+# Jump to next instruction, but in 32-bit code segment.
+# Switches processor into 32-bit mode.
+ljmp $PROT_MODE_CSEG, $protcseg
+.code32
+protcseg:
+#...
+~~~
+
+设置段选择子的值，并建立堆栈
+
+```
+movw $PROT_MODE_DSEG, %ax
+movw %ax, %ds
+movw %ax, %es
+movw %ax, %fs
+movw %ax, %gs
+movw %ax, %ss
+
+movl $0x0, %ebp
+movl $start, %esp
+```
+
+保护模式转换完成，进入`boot`主方法
+
+```
+call bootmain
+```
+
+
+
+#### （3）问题回答
+
+总结上面的代码分析，现在来回答练习三中提出的问题
+
+> 为何开启A20，以及如何开启A20
+
+**为什么我们要开启`A20`**:
+
+从代码注释中我们了解到，一开始时`A20`地址线控制是被屏蔽的（见注释中`address line is tied low`），直到系统软件通过一定的`IO`操作去打开它 。
+
+如果我们要在实模式下要访问高位的内存区，要开启`A20`地址线。
+
+因为如果在保护模式下（也就是使用32位地址线的情况下），如果`A20`恒等于0，那么系统只能访问奇数兆的内存，即只能访问`0-1M`、`2-3M`、`4-5M`，这样无法有效访问所有可用内存。所以在保护模式下，必须要开启`A20`。
+
+```makefile
+# Enable A20:
+#  For backwards compatibility with the earliest PCs, physical
+#  address line 20 is tied low, so that addresses higher than
+#  1MB wrap around to zero by default. This code undoes this.
+```
+
+**如何开启A20？**
+
+打开`A20 Gate`的具体步骤大致如下：
+
+1. 等待`8042 Input buffer`为空
+2. 发送`Write 8042 Output Port （P2）` 命令到`8042 Input buffer`
+3. 等待`8042 Input buffer`为空
+4. 将`8042 Output Port（P2）` 对应字节的第2位置1，然后写入`8042 Input buffer`
+
+> 如何初始化GDT表
+
+一个简单的GDT表和其描述符已经静态储存在引导区中，载入即可`lgdt gdtdesc`
+
+> 如何使能和进入保护模式
+
+将cr0寄存器的PE位（cr0寄存器的最低位）设置为1，便使能和进入保护模式了。
 
