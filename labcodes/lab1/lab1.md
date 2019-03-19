@@ -999,6 +999,66 @@ for (; ph < eph; ph ++) {
 
 
 
+#### 【运行调试】
+
+（1）在`bootmain`函数入口处即`0x7d0d`设置断点
+
+修改`tools/gdbinit`为
+
+~~~c
+file obj/bootblock.o
+target remote :1234
+break bootmain
+continue
+~~~
+
+（2）然后通过`make debug`命令进入`gdb`调试，输入`c`继续执行后，不断用`n`查看下一条指令，直到执行完`readseg`函数，查询`ELF Header`的`e_magic`的值:
+
+~~~makefile
+(gdb) x/xw 0x10000
+0x10000:        0x464c457f
+~~~
+
+发现与`ELF_MAGIC`，因此校验成功
+
+（3）我们观察Program Header即`proghdr`结构体，下面8个字节分别表示了该结构体各元素的值
+
+~~~c
+(gdb) x/8xw 0x10034
+0x10034:        0x00000001      0x00001000      0x00100000      0x00100000
+0x10044:        0x0000d024      0x0000d024      0x00000005      0x00001000
+~~~
+
+同时我们查看命令行, 查询结果如下图中所示，与`gdb`调试结果一致。
+
+~~~python
+$ readelf -l bin/kernel
+
+Elf file type is EXEC (Executable file)
+Entry point 0x100000
+There are 3 program headers, starting at offset 52
+
+Program Headers:
+  Type   Offset     VirtAddr       PhysAddr     FileSiz    MemSiz  Flg  Align
+  LOAD   0x001000 	0x00100000     0x00100000 	0x0d024    0x0d024 R E 0x1000
+  LOAD   0x00f000   0x0010e000     0x0010e000 	0x00a16    0x01d20 RW  0x1000
+  GNU_STACK  0x000000 0x00000000   0x00000000 	0x00000    0x00000 RWE 0x10
+
+ Section to Segment mapping:
+  Segment Sections...
+   00     .text .rodata .stab .stabstr
+   01     .data .bss
+   02
+~~~
+
+
+
+​                             
+
+
+
+
+
 ---
 
 
