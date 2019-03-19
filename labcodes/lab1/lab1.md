@@ -447,3 +447,94 @@ The target architecture is assumed to be i386
 
 > 从0x7c00开始跟踪代码运行,将单步跟踪反汇编得到的代码与bootasm.S和 bootblock.asm进行比较。
 
+（1）修改`lab1/tools/gdbinit`
+
+~~~makefile
+file bin/kernel				#加载kernel
+set architecture i8086		#进入8086的16位实模式
+target remote :1234			#与qemu进行TCP/IP连接
+break kern_init				
+continue
+b *0x7c00
+c
+x /10i $pc					#输出十条指令
+~~~
+
+（2）修改Makefile`中`qemu`
+
+~~~makefile
+qemu: $(UCOREIMG) $(V)$(QEMU) -no-reboot -d in_asm -D q.log -parallel stdio -hda $< -serial null 		#增加的参数用来将运行的汇编指令保存在q.log中
+~~~
+
+（3）我们运行`make qemu`获得的结果保存在`q.log`中：
+
+摘录`q.log`其中一部分如下：
+
+~~~makefile
+----------------
+IN: 
+0xfffffff0:  ljmp   $0xf000,$0xe05b
+
+----------------
+IN: 
+0x000fe05b:  cmpl   $0x0,%cs:0x65a4
+0x000fe062:  jne    0xfd2b9
+
+----------------
+IN: 
+0x000fe066:  xor    %ax,%ax
+0x000fe068:  mov    %ax,%ss
+
+----------------
+IN: 
+0x000fe06a:  mov    $0x7000,%esp
+
+----------------
+IN: 
+0x000fe070:  mov    $0xf3c4f,%edx
+0x000fe076:  jmp    0xfd12a
+
+----------------
+IN: 
+0x000fd12a:  mov    %eax,%ecx
+0x000fd12d:  cli    
+0x000fd12e:  cld    
+0x000fd12f:  mov    $0x8f,%eax
+0x000fd135:  out    %al,$0x70
+0x000fd137:  in     $0x71,%al
+0x000fd139:  in     $0x92,%al
+0x000fd13b:  or     $0x2,%al
+0x000fd13d:  out    %al,$0x92
+0x000fd13f:  lidtw  %cs:0x66c0
+0x000fd145:  lgdtw  %cs:0x6680
+0x000fd14b:  mov    %cr0,%eax
+0x000fd14e:  or     $0x1,%eax
+0x000fd152:  mov    %eax,%cr0
+
+----------------
+IN: 
+0x000fd155:  ljmpl  $0x8,$0xfd15d
+
+----------------
+IN: 
+0x000fd15d:  mov    $0x10,%eax
+0x000fd162:  mov    %eax,%ds
+
+----------------
+IN: 
+0x000fd164:  mov    %eax,%es
+
+----------------
+IN: 
+0x000fd166:  mov    %eax,%ss
+
+# ............
+~~~
+
+将上述代码与bootasm.S和bootblock.asm比较，发现汇编指令相同。 
+
+
+
+##### 【练习2.4】
+
+自己找一个bootloader或内核中的代码位置，设置断点并进行测试
