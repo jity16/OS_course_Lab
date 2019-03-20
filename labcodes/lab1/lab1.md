@@ -1200,6 +1200,12 @@ struct gatedesc {
 
 
 
+#### 【第二问】
+
+> 请编程完善kern/trap/trap.c中对中断向量表进行初始化的函数idt_init。在idt_init函数中，依次对所有中断入口进行初始化。使用mmu.h中的SETGATE宏，填充idt数组内容。每个中断的入口由tools/vectors.c生成，使用trap.c中声明的vectors数组即可。
+
+
+
 
 
 
