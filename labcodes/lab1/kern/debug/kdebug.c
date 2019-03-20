@@ -306,7 +306,7 @@ print_stackframe(void) {
     uint32_t eip = read_eip(); //(2) call read_eip() to get the value of eip. the type is (uint32_t);
 
     int i = 0;
-    while(ebp != 0 && i < STACKFRAME_DEPTH) {
+    while(ebp != 0 && i < STACKFRAME_DEPTH) {   // (3) from 0 .. STACKFRAME_DEPTH
         cprintf("ebp:0x%08x eip:0x%08x args:", ebp, eip);       //(3.1) printf value of ebp, eip
         uint32_t *args = (uint32_t *)ebp + 2;      // (3.2) (uint32_t)calling arguments [0..4] = the contents in address (uint32_t)ebp +2 [0..4]                           
         int j = 0;
