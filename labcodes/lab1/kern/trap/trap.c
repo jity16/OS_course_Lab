@@ -47,7 +47,7 @@ idt_init(void) {
       *     Notice: the argument of lidt is idt_pd. try to find it!
       */
     extern uintptr_t __vectors[];   //define ISR's entry addrs _vectors[]
-    int i;
+    int i = 0;
     //arguments：0 means interrupt，GD_KTEXT means kernel text
     //use SETGATE macro to setup each item of IDT
     while(i < sizeof(idt) / sizeof(struct gatedesc)) {

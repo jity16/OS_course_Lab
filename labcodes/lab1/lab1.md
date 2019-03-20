@@ -1221,7 +1221,7 @@ idt_init(void) {
       *     Notice: the argument of lidt is idt_pd. try to find it!
       */
     extern uintptr_t __vectors[];   //define ISR's entry addrs _vectors[]
-    int i;
+    int i = 0;
     //arguments：0 means interrupt，GD_KTEXT means kernel text
     //use SETGATE macro to setup each item of IDT
     while(i < sizeof(idt) / sizeof(struct gatedesc)) {
@@ -1243,6 +1243,26 @@ idt_init(void) {
 #### 【第三问】
 
 > 请编程完善trap.c中的中断处理函数trap，在对时钟中断进行处理的部分填写trap函数中处理时钟中断的部分，使操作系统每遇到100次时钟中断后，调用print_ticks子程序，向屏幕上打印一行文字”100 ticks”。
+
+~~~c
+static void
+trap_dispatch(struct trapframe *tf) {
+    char c;
+
+    switch (tf->tf_trapno) {
+    case IRQ_OFFSET + IRQ_TIMER:
+        /* LAB1 2016010308 : STEP 3 */
+        /* handle the timer interrupt */
+        /* (1) After a timer interrupt, you should record this event using a global variable (increase it), such as ticks in kern/driver/clock.c
+         * (2) Every TICK_NUM cycle, you can print some info using a funciton, such as print_ticks().
+         * (3) Too Simple? Yes, I think so!
+         */
+        ticks++;
+        if (ticks % TICK_NUM == 0) {
+            print_ticks();
+        }
+        break;
+~~~
 
 
 
