@@ -193,7 +193,7 @@ trap_dispatch(struct trapframe *tf) {
                 print_trapframe(tf);
             }
         }
-        if(c == '3'){
+        else if(c == '3'){
             if (tf->tf_cs != USER_CS) {
                 tf->tf_cs = USER_CS;
                 tf->tf_ds = tf->tf_es = tf->tf_ss = USER_DS;
