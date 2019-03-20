@@ -1063,3 +1063,111 @@ Program Headers:
 
 > 我们需要在lab1中完成kdebug.c中函数print_stackframe的实现，可以通过函数print_stackframe来跟踪函数调用堆栈中记录的返回地址。
 
+#### 步骤分析
+
+我们观察`print_stackframe`函数，`lab1`中为我们提供了非常详细的步骤，只需要按照步骤来写就可以。
+
+~~~c
+/* LAB1 2016010308 : STEP 1 */
+     /* (1) call read_ebp() to get the value of ebp. the type is (uint32_t);
+      * (2) call read_eip() to get the value of eip. the type is (uint32_t);
+      * (3) from 0 .. STACKFRAME_DEPTH
+      *    (3.1) printf value of ebp, eip
+      *    (3.2) (uint32_t)calling arguments [0..4] = the contents in address (uint32_t)ebp +2 [0..4]
+      *    (3.3) cprintf("\n");
+      *    (3.4) call print_debuginfo(eip-1) to print the C calling function name and line number, etc.
+      *    (3.5) popup a calling stackframe
+      *           NOTICE: the calling funciton's return addr eip  = ss:[ebp+4]
+      *                   the calling funciton's ebp = ss:[ebp]
+      */
+~~~
+
+#### 代码
+
+我的代码中对每一句代码都进行了相应的注释标注
+
+~~~c
+void
+print_stackframe(void) {
+ 	//(1) call read_ebp() to get the value of ebp. the type is (uint32_t);
+    uint32_t ebp = read_ebp();
+    //(2) call read_eip() to get the value of eip. the type is (uint32_t);
+    uint32_t eip = read_eip(); 
+    int i = 0;
+    while(ebp != 0 && i < STACKFRAME_DEPTH) { //(3) from 0 .. STACKFRAME_DEPTH
+    	//(3.1) printf value of ebp, eip    
+        cprintf("ebp:0x%08x eip:0x%08x args:", ebp, eip);   
+       	// (3.2) (uint32_t)calling arguments [0..4] = the contents in address (uint32_t)ebp +2 [0..4]    
+        uint32_t *args = (uint32_t *)ebp + 2;                            
+        int j = 0;
+        while(j < 4){           
+            cprintf("0x%08x ", args[j]);
+            j ++;
+        }
+        cprintf("\n");      //(3.3) cprintf("\n");
+        //(3.4) call print_debuginfo(eip-1) to print the C calling function name and line number, etc.
+        print_debuginfo(eip - 1);
+        //(3.5) popup a calling stackframe
+        eip = ((uint32_t *)ebp)[1]; 
+        ebp = ((uint32_t *)ebp)[0]; 
+        i++;
+    }
+}
+
+~~~
+
+#### 实验结果
+
+执行`make qemu`得到如下的结果，与题目所要求的输出结果一致
+
+~~~makefile
+Special kernel symbols:
+  entry  0x00100000 (phys)
+  etext  0x001032d6 (phys)
+  edata  0x0010ea16 (phys)
+  end    0x0010fd20 (phys)
+Kernel executable memory footprint: 64KB
+ebp:0x00007b08 eip:0x001009a6 args:0x00010094 0x00000000 0x00007b38 0x00100092 
+    kern/debug/kdebug.c:306: print_stackframe+21
+ebp:0x00007b18 eip:0x00100c95 args:0x00000000 0x00000000 0x00000000 0x00007b88 
+    kern/debug/kmonitor.c:125: mon_backtrace+10
+ebp:0x00007b38 eip:0x00100092 args:0x00000000 0x00007b60 0xffff0000 0x00007b64 
+    kern/init/init.c:48: grade_backtrace2+33
+ebp:0x00007b58 eip:0x001000bb args:0x00000000 0xffff0000 0x00007b84 0x00000029 
+    kern/init/init.c:53: grade_backtrace1+38
+ebp:0x00007b78 eip:0x001000d9 args:0x00000000 0x00100000 0xffff0000 0x0000001d 
+    kern/init/init.c:58: grade_backtrace0+23
+ebp:0x00007b98 eip:0x001000fe args:0x001032fc 0x001032e0 0x0000130a 0x00000000 
+    kern/init/init.c:63: grade_backtrace+34
+ebp:0x00007bc8 eip:0x00100055 args:0x00000000 0x00000000 0x00000000 0x00010094 
+    kern/init/init.c:28: kern_init+84
+ebp:0x00007bf8 eip:0x00007d68 args:0xc031fcfa 0xc08ed88e 0x64e4d08e 0xfa7502a8 
+    <unknow>: -- 0x00007d67 --
+++ setup timer interrupts
+~~~
+
+#### 解释最后一行各个参数的含义
+
+最后一行是`ebp:0x00007bf8 eip:0x00007d68 args:0xc031fcfa 0xc08ed88e 0x64e4d08e 0xfa7502a8`, 此行中共有`ebp`，`eip`和`args`三种参数
+
+（1）**ebp:0x00007bf8**
+
+从`obj/bootblock.asm`文件中知道整个栈的栈顶地址为`0x00007c00`，当前 `ebp`的值是`kern_init`函数的栈顶地址。`ebp`指向的栈位置存放调用者的`ebp`寄存器的值，`ebp+4`指向的栈位置存放返回地址的值。
+
+（2）**eip:0x00007d68 **
+
+`eip`的值是`kern_init`函数的返回地址，即`bootmain`函数调用`kern_init`对应的指令的下一条指令的地址,与`obj/bootblock.asm`中的汇编指令是相符合的。
+
+~~~c
+7d66:	ff d0                	call   *%eax
+7d68:	b8 00 8a ff ff       	mov    $0xffff8a00,%eax
+~~~
+
+（3）**args:0xc031fcfa 0xc08ed88e 0x64e4d08e 0xfa7502a8 **
+
+`args`存放的4个`dword`对应4个输入参数的值。但`bootmain`函数调用`kern_init`并没传递任何输入参数，并且栈顶的位置恰好在`bootloader`第一条指令存放的地址`0x7c00`。我们观察到`args`恰好是`kern_int`的`ebp`寄存器指向的栈顶往上第`2~5`个单元，因此我们得知`args`存放的就是`bootloader`指令的前16个字节。
+
+
+
+---
+
