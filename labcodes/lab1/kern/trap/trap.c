@@ -185,6 +185,22 @@ trap_dispatch(struct trapframe *tf) {
     case IRQ_OFFSET + IRQ_KBD:
         c = cons_getc();
         cprintf("kbd [%03d] %c\n", c, c);
+        if(c == '0'){
+            if (tf->tf_cs != KERNEL_CS) {
+                tf->tf_cs = KERNEL_CS;
+                tf->tf_ds = tf->tf_es = KERNEL_DS;
+                tf->tf_eflags &= ~FL_IOPL_MASK;
+                print_trapframe(tf);
+            }
+        }
+        if(c == '3'){
+            if (tf->tf_cs != USER_CS) {
+                tf->tf_cs = USER_CS;
+                tf->tf_ds = tf->tf_es = tf->tf_ss = USER_DS;
+                tf->tf_eflags |= FL_IOPL_MASK;
+                print_trapframe(tf);
+            }
+        }
         break;
     //LAB1 CHALLENGE 1 : 2016010308 you should modify below codes.
     case T_SWITCH_TOU:

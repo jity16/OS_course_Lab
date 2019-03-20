@@ -1271,7 +1271,9 @@ trap_dispatch(struct trapframe *tf) {
 
 ---
 
-### （七）扩展练习 Challenge 1
+### （七）扩展练习 
+
+#### Challenge 1
 
 > 扩展proj4,增加syscall功能，即增加一用户态函数（可执行一特定系统调用：获得时钟计数值），当内核初始完毕后，可从内核态返回到用户态的函数，而用户态的函数又通过系统调用得到内核态的服务（通过网络查询所需信息，可找老师咨询。如果完成，且有兴趣做代替考试的实验，可找老师商量）。需写出详细的设计和分析报告。完成出色的可获得适当加分。
 
@@ -1290,6 +1292,8 @@ trap_dispatch
 ​    // user/kernel mode switch test
 
 ​    lab1_switch_test();
+
+#### Challenge 2
 
 
 
