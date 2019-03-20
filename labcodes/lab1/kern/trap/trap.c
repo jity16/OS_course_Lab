@@ -146,7 +146,6 @@ print_regs(struct pushregs *regs) {
     cprintf("  eax  0x%08x\n", regs->reg_eax);
 }
 
-static int ticks = 0;
 /* trap_dispatch - dispatch based on what type of trap occurred */
 static void
 trap_dispatch(struct trapframe *tf) {
