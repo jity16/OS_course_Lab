@@ -1301,7 +1301,6 @@ read_ebp(void) {
   1009a1:	e8 d9 ff ff ff       	call   10097f <read_eip>
   1009a6:	89 45 f0             	mov    %eax,-0x10(%ebp)
 
-    //for (int i = 0; ebp != 0 && i < STACKFRAME_DEPTH; i++) {    //(3) from 0 .. STACKFRAME_DEPTH
     int i = 0;
   1009a9:	c7 45 ec 00 00 00 00 	movl   $0x0,-0x14(%ebp)
     while(ebp != 0 && i < STACKFRAME_DEPTH) {
@@ -1317,7 +1316,6 @@ read_ebp(void) {
   1009cf:	8b 45 f4             	mov    -0xc(%ebp),%eax
   1009d2:	83 c0 08             	add    $0x8,%eax
   1009d5:	89 45 e4             	mov    %eax,-0x1c(%ebp)
-        //for (int j = 0; j < 4; j ++) {  
         int j = 0;
   1009d8:	c7 45 e8 00 00 00 00 	movl   $0x0,-0x18(%ebp)
         while(j < 4){           
@@ -1333,10 +1331,10 @@ read_ebp(void) {
   1009fd:	e8 10 f9 ff ff       	call   100312 <cprintf>
             j ++;
   100a02:	83 45 e8 01          	addl   $0x1,-0x18(%ebp)
+    int i = 0;
     while(ebp != 0 && i < STACKFRAME_DEPTH) {
         cprintf("ebp:0x%08x eip:0x%08x args:", ebp, eip);       //(3.1) printf value of ebp, eip
         uint32_t *args = (uint32_t *)ebp + 2;      // (3.2) (uint32_t)calling arguments [0..4] = the contents in address (uint32_t)ebp +2 [0..4]                           
-        //for (int j = 0; j < 4; j ++) {  
         int j = 0;
         while(j < 4){           
   100a06:	83 7d e8 03          	cmpl   $0x3,-0x18(%ebp)
@@ -1344,7 +1342,6 @@ read_ebp(void) {
             cprintf("0x%08x ", args[j]);
             j ++;
         }
-        //}
         cprintf("\n");      //(3.3) cprintf("\n");
   100a0c:	c7 04 24 8c 34 10 00 	movl   $0x10348c,(%esp)
   100a13:	e8 fa f8 ff ff       	call   100312 <cprintf>
@@ -1364,10 +1361,10 @@ read_ebp(void) {
   100a36:	89 45 f4             	mov    %eax,-0xc(%ebp)
         i++;
   100a39:	83 45 ec 01          	addl   $0x1,-0x14(%ebp)
+      */
     uint32_t ebp = read_ebp(); //(1) call read_ebp() to get the value of ebp. the type is (uint32_t);
     uint32_t eip = read_eip(); //(2) call read_eip() to get the value of eip. the type is (uint32_t);
 
-    //for (int i = 0; ebp != 0 && i < STACKFRAME_DEPTH; i++) {    //(3) from 0 .. STACKFRAME_DEPTH
     int i = 0;
     while(ebp != 0 && i < STACKFRAME_DEPTH) {
   100a3d:	83 7d f4 00          	cmpl   $0x0,-0xc(%ebp)

@@ -12960,13 +12960,13 @@ IN:
 0x000c20db:  pop    %ebp
 0x000c20dd:  ret    $0x2
 
-Servicing hardware INT=0x08
 ----------------
 IN: 
 0x000f1795:  add    $0x28,%esp
 0x000f1798:  pop    %ebx
 0x000f1799:  ret    
 
+Servicing hardware INT=0x08
 ----------------
 IN: 
 0x000f17b5:  mov    $0xd,%eax
@@ -16535,7 +16535,6 @@ IN:
 0x000c9504:  xchg   %al,%ah
 0x000c9506:  call   0xc950b
 
-Servicing hardware INT=0x08
 ----------------
 IN: 
 0x000c92e1:  inc    %esi
@@ -16594,6 +16593,7 @@ IN:
 0x000c9229:  add    %al,%bl
 0x000c922b:  loop   0xc9228
 
+Servicing hardware INT=0x08
 ----------------
 IN: 
 0x000c9228:  lods   %ds:(%si),%al
@@ -19204,6 +19204,7 @@ IN:
 0x000fe3e8:  pop    %edi
 0x000fe3ea:  retl   
 
+Servicing hardware INT=0x08
 ----------------
 IN: 
 0x000fd2a9:  lret   
