@@ -51,16 +51,16 @@ idt_init(void) {
     //arguments：0 means interrupt，GD_KTEXT means kernel text
     //use SETGATE macro to setup each item of IDT
     while(i < sizeof(idt) / sizeof(struct gatedesc)) {
-        SETGATE(idt[i], 0, GD_KTEXT, __vectors[i], DPL_KERNEL);
+        if (i == T_SYSCALL || i == T_SWITCH_TOK) {
+            SETGATE(idt[i], 1, KERNEL_CS, __vectors[i], DPL_USER);
+        }
+        else{
+            SETGATE(idt[i], 0, GD_KTEXT, __vectors[i], DPL_KERNEL);
+        }
         i ++;
     }
-    if (i == T_SYSCALL || i == T_SWITCH_TOK) {
-        SETGATE(idt[i], 1, KERNEL_CS, __vectors[i], DPL_USER);
-    }
-    else{
-        // switch from user state to kernel state
-        SETGATE(idt[T_SWITCH_TOK], 0, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
-    }
+    // switch from user state to kernel state
+    SETGATE(idt[T_SWITCH_TOK], 0, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
     //let CPU know where is IDT by using 'lidt' instruction
     lidt(&idt_pd);
 }
