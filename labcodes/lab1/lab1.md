@@ -1275,26 +1275,21 @@ trap_dispatch(struct trapframe *tf) {
 
 > 扩展proj4,增加syscall功能，即增加一用户态函数（可执行一特定系统调用：获得时钟计数值），当内核初始完毕后，可从内核态返回到用户态的函数，而用户态的函数又通过系统调用得到内核态的服务（通过网络查询所需信息，可找老师咨询。如果完成，且有兴趣做代替考试的实验，可找老师商量）。需写出详细的设计和分析报告。完成出色的可获得适当加分。
 
-~~~c
-//LAB1 CHALLENGE 1 : 2016010308 you should modify below codes.
-    case T_SWITCH_TOU:
-        if (tf->tf_cs != USER_CS) {
-            tf->tf_cs = USER_CS;
-            tf->tf_ds = tf->tf_es = tf->tf_ss = USER_DS;
-            tf->tf_eflags |= FL_IOPL_MASK;
-        }
-        break;
-    case T_SWITCH_TOK:
-        if (tf->tf_cs != KERNEL_CS) {
-            tf->tf_cs = KERNEL_CS;
-            tf->tf_ds = tf->tf_es = KERNEL_DS;
-            tf->tf_eflags &= ~FL_IOPL_MASK;
-        }
-        panic("T_SWITCH_** ??\n");
-        break;
-~~~
 
 
+开了状态
+
+switch_to_user
+
+switch_to_kernel
+
+trap_dispatch
+
+​    //LAB1: CAHLLENGE 1 If you try to do it, uncomment lab1_switch_test()
+
+​    // user/kernel mode switch test
+
+​    lab1_switch_test();
 
 
 

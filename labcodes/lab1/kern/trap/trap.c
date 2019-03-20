@@ -55,7 +55,9 @@ idt_init(void) {
         i ++;
     }
     // switch from user state to kernel state
-    SETGATE(idt[T_SWITCH_TOK], 0, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
+    //SETGATE(idt[T_SWITCH_TOK], 0, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
+    SETGATE(idt[T_SYSCALL], 1, GD_KTEXT, __vectors[T_SYSCALL], DPL_USER);
+    SETGATE(idt[T_SWITCH_TOK], 1, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
     //let CPU know where is IDT by using 'lidt' instruction
     lidt(&idt_pd);
 }
@@ -146,7 +148,25 @@ print_regs(struct pushregs *regs) {
     cprintf("  eax  0x%08x\n", regs->reg_eax);
 }
 
+/* switch_to_user - switch to user mode by changing trap frame */
+static void
+switch_to_user(struct trapframe *tf) {
+    if (tf->tf_cs != USER_CS) {
+        tf->tf_cs = USER_CS;
+        tf->tf_ds = tf->tf_es = tf->tf_ss = USER_DS;
+        tf->tf_eflags |= FL_IOPL_MASK;
+    }
+}
 
+/* switch_to_kernel - switch to kernel mode by changing trap frame */
+static void
+switch_to_kernel(struct trapframe *tf) {
+    if (tf->tf_cs != KERNEL_CS) {
+        tf->tf_cs = KERNEL_CS;
+        tf->tf_ds = tf->tf_es = KERNEL_DS;
+        tf->tf_eflags &= ~FL_IOPL_MASK;
+    }
+}
 
 /* trap_dispatch - dispatch based on what type of trap occurred */
 static void
@@ -176,8 +196,10 @@ trap_dispatch(struct trapframe *tf) {
         break;
     //LAB1 CHALLENGE 1 : 2016010308 you should modify below codes.
     case T_SWITCH_TOU:
+        switch_to_user(tf);
     case T_SWITCH_TOK:
-        panic("T_SWITCH_** ??\n");
+        switch_to_user(tf);
+        //panic("T_SWITCH_** ??\n");
         break;
     case IRQ_OFFSET + IRQ_IDE1:
     case IRQ_OFFSET + IRQ_IDE2:
