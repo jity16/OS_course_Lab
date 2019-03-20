@@ -188,8 +188,7 @@ trap_dispatch(struct trapframe *tf) {
     case T_SWITCH_TOK:
         if (tf->tf_cs != KERNEL_CS) {
             tf->tf_cs = KERNEL_CS;
-            tf->tf_ds = tf->tf_es = KERNEL_DS;
-            tf->tf_eflags &= ~FL_IOPL_MASK;
+            tf->tf_ds = tf->tf_es = tf->tf_ss = KERNEL_DS;
         }
         panic("T_SWITCH_** ??\n");
         break;
