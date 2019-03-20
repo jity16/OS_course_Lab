@@ -55,7 +55,8 @@ idt_init(void) {
         i ++;
     }
     // switch from user state to kernel state
-    SETGATE(idt[T_SWITCH_TOK], 0, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
+    //SETGATE(idt[T_SWITCH_TOK], 0, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
+    SETGATE(idt[T_SWITCH_TOK], 1, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
     //let CPU know where is IDT by using 'lidt' instruction
     lidt(&idt_pd);
 }
