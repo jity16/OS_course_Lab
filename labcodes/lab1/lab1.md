@@ -8,7 +8,7 @@
 
 ---
 
-### （一）练习一
+### （一）理解通过make生成执行文件的过程
 
 #### 第一问
 
@@ -344,7 +344,7 @@ buf[511] = 0xAA;		//结尾两个字节的内容
 
 ---
 
-### （二）练习二
+### （二）使用qemu执行并调试lab1中的软件
 
 #### 【练习2.1】
 
@@ -568,7 +568,7 @@ Breakpoint 2, clock_init () at libs/x86.h:57
 
 ---
 
-### （三）练习三
+### （三）分析bootloader进入保护模式的过程
 
 > BIOS将通过读取硬盘主引导扇区到内存，并转跳到对应内存中的位置执行bootloader。请分析bootloader是如何完成从实模式进入保护模式的。
 
@@ -780,7 +780,7 @@ call bootmain
 
 ---
 
-### （四）练习四
+### （四）分析bootloader加载ELF格式的OS的过程
 
 > 分析`bootloader`加载`ELF`格式的`OS`的过程
 >
@@ -1059,7 +1059,7 @@ Program Headers:
 
 ---
 
-### （五）练习五
+### （五）实现函数调用堆栈跟踪函数 
 
 > 我们需要在lab1中完成kdebug.c中函数print_stackframe的实现，可以通过函数print_stackframe来跟踪函数调用堆栈中记录的返回地址。
 
@@ -1170,4 +1170,47 @@ ebp:0x00007bf8 eip:0x00007d68 args:0xc031fcfa 0xc08ed88e 0x64e4d08e 0xfa7502a8
 
 
 ---
+
+### （六）完善中断初始化和处理 
+
+#### 【第一问】
+
+> 中断描述符表（也可简称为保护模式下的中断向量表）中一个表项占多少字节？其中哪几位代表中断处理代码的入口？
+
+中断描述符表把每个中断或异常编号和一个指向中断服务例程的描述符联系起来。我们阅读【中断与异常】小结，得知中断描述符表中一个表项占用8个字节：其中`0-1`字节和`6-7`字节是偏移地址，`2-3`字节是段选择子。
+
+我们观察中断描述符的结构体定义，结构体定义在`mmu.h`中:
+
+~~~c
+/* Gate descriptors for interrupts and traps */
+struct gatedesc {
+    unsigned gd_off_15_0 : 16;        // low 16 bits of offset in segment
+    unsigned gd_ss : 16;            // segment selector
+    unsigned gd_args : 5;            // # args, 0 for interrupt/trap gates
+    unsigned gd_rsv1 : 3;            // reserved(should be zero I guess)
+    unsigned gd_type : 4;            // type(STS_{TG,IG32,TG32})
+    unsigned gd_s : 1;                // must be 0 (system)
+    unsigned gd_dpl : 2;            // descriptor(meaning new) privilege level
+    unsigned gd_p : 1;                // Present
+    unsigned gd_off_31_16 : 16;        // high bits of offset in segment
+};
+~~~
+
+`CPU`会根据得到的中断向量到`IDT`中找到该向量对应的中断描述符，中断描述符中保存中中断服务例程的段选择子，通过段选择子从GDT表中找到对应的段描述符，由于段描述符中存有相应的基址地址而中断描述符中又存有偏移地址，二者就可以确定中断例程的入口地址。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
