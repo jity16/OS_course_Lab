@@ -1053,13 +1053,13 @@ Program Headers:
 
 
 
-​                             
-
-
+​                        
 
 
 
 ---
 
+### （五）练习五
 
+> 我们需要在lab1中完成kdebug.c中函数print_stackframe的实现，可以通过函数print_stackframe来跟踪函数调用堆栈中记录的返回地址。
 
