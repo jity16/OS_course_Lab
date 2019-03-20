@@ -54,9 +54,13 @@ idt_init(void) {
         SETGATE(idt[i], 0, GD_KTEXT, __vectors[i], DPL_KERNEL);
         i ++;
     }
-    // switch from user state to kernel state
-    //SETGATE(idt[T_SWITCH_TOK], 0, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
-    SETGATE(idt[T_SWITCH_TOK], 1, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
+    if (i == T_SYSCALL || i == T_SWITCH_TOK) {
+        SETGATE(idt[i], 1, KERNEL_CS, __vectors[i], DPL_USER);
+    }
+    else{
+        // switch from user state to kernel state
+        SETGATE(idt[T_SWITCH_TOK], 0, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
+    }
     //let CPU know where is IDT by using 'lidt' instruction
     lidt(&idt_pd);
 }
