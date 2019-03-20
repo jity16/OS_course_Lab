@@ -51,12 +51,7 @@ idt_init(void) {
     //arguments：0 means interrupt，GD_KTEXT means kernel text
     //use SETGATE macro to setup each item of IDT
     while(i < sizeof(idt) / sizeof(struct gatedesc)) {
-        if (i == T_SYSCALL || i == T_SWITCH_TOK) {
-            SETGATE(idt[i], 1, KERNEL_CS, __vectors[i], DPL_USER);
-        }
-        else{
-            SETGATE(idt[i], 0, GD_KTEXT, __vectors[i], DPL_KERNEL);
-        }
+        SETGATE(idt[i], 0, GD_KTEXT, __vectors[i], DPL_KERNEL);
         i ++;
     }
     // switch from user state to kernel state
@@ -151,6 +146,10 @@ print_regs(struct pushregs *regs) {
     cprintf("  eax  0x%08x\n", regs->reg_eax);
 }
 
+/* temporary trapframe or pointer to trapframe */
+struct trapframe switchk2u, *switchu2k;
+
+
 /* trap_dispatch - dispatch based on what type of trap occurred */
 static void
 trap_dispatch(struct trapframe *tf) {
@@ -180,15 +179,28 @@ trap_dispatch(struct trapframe *tf) {
     //LAB1 CHALLENGE 1 : 2016010308 you should modify below codes.
     case T_SWITCH_TOU:
         if (tf->tf_cs != USER_CS) {
-            tf->tf_cs = USER_CS;
-            tf->tf_ds = tf->tf_es = tf->tf_ss = USER_DS;
-            tf->tf_eflags |= FL_IOPL_MASK;
+            switchk2u = *tf;
+            switchk2u.tf_cs = USER_CS;
+            switchk2u.tf_ds = switchk2u.tf_es = switchk2u.tf_ss = USER_DS;
+            switchk2u.tf_esp = (uint32_t)tf + sizeof(struct trapframe) - 8;
+		
+            // set eflags, make sure ucore can use io under user mode.
+            // if CPL > IOPL, then cpu will generate a general protection.
+            switchk2u.tf_eflags |= FL_IOPL_MASK;
+		
+            // set temporary stack
+            // then iret will jump to the right stack
+            *((uint32_t *)tf - 1) = (uint32_t)&switchk2u;
         }
         break;
     case T_SWITCH_TOK:
         if (tf->tf_cs != KERNEL_CS) {
             tf->tf_cs = KERNEL_CS;
-            tf->tf_ds = tf->tf_es = tf->tf_ss = KERNEL_DS;
+            tf->tf_ds = tf->tf_es = KERNEL_DS;
+            tf->tf_eflags &= ~FL_IOPL_MASK;
+            switchu2k = (struct trapframe *)(tf->tf_esp - (sizeof(struct trapframe) - 8));
+            memmove(switchu2k, tf, sizeof(struct trapframe) - 8);
+            *((uint32_t *)tf - 1) = (uint32_t)switchu2k;
         }
         //panic("T_SWITCH_** ??\n");
         break;
