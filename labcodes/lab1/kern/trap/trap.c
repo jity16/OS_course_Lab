@@ -190,7 +190,7 @@ trap_dispatch(struct trapframe *tf) {
             tf->tf_cs = KERNEL_CS;
             tf->tf_ds = tf->tf_es = tf->tf_ss = KERNEL_DS;
         }
-        panic("T_SWITCH_** ??\n");
+        //panic("T_SWITCH_** ??\n");
         break;
     case IRQ_OFFSET + IRQ_IDE1:
     case IRQ_OFFSET + IRQ_IDE2:
