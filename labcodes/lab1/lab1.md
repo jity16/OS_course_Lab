@@ -1359,7 +1359,7 @@ lab1_switch_to_kernel(void) {
 
 ##### make grade结果
 
-![](./makegrade.png)
+![](./figs/makegrade.png)
 
 
 
