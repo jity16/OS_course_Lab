@@ -1277,23 +1277,172 @@ trap_dispatch(struct trapframe *tf) {
 
 > 扩展proj4,增加syscall功能，即增加一用户态函数（可执行一特定系统调用：获得时钟计数值），当内核初始完毕后，可从内核态返回到用户态的函数，而用户态的函数又通过系统调用得到内核态的服务（通过网络查询所需信息，可找老师咨询。如果完成，且有兴趣做代替考试的实验，可找老师商量）。需写出详细的设计和分析报告。完成出色的可获得适当加分。
 
+##### 原理分析
+
+RPL背后的设计思想是：允许内核代码加载特权较低的段。但堆栈段寄存器是个例外，它要求`CPL，RPL和DPL`这3个值必须完全一致，才可以被加载。
+
+当前执行代码的特权级与`IOPL、CPL、DPL和RPL`字段有关。当内核陷入中断之后，中断前的`EFLAGS、DS、ES、CS、SS`都保存在栈中，当中断处理结束之后，这些值都会恢复到相应的寄存器中，所以改变优先级的方法就是对保存在栈中的寄存器值进行修改。
+
+模式的切换通过中断来完成。内核态发生`trap`时`esp`和`ss`不压栈。内核态到用户态的切换，需要从内核态栈中弹出用户态栈的`ss`和`esp`的值，为此在调用中断之前需要预留`8`字节的空间。在调用中断返回之后，恢复中断处理之前的栈指针。同时为了能使`T_SWITCH_TOK`能在用户模式下被调用，在建立`IDT`时，需要设置其`DPL`为`3`，并且设置陷入标志。
+
+为了方便`Challenge2`调用，在`trap.c`中将状态切换封装为以下两个函数：
+
+##### 代码
+
+**switch_to_user**：切换到用户态
+
+~~~c
+/* switch_to_user - switch to user mode by changing trap frame */
+static void
+switch_to_user(struct trapframe *tf) {
+    if (tf->tf_cs != USER_CS) {
+        tf->tf_cs = USER_CS;
+        tf->tf_ds = tf->tf_es = tf->tf_ss = USER_DS;
+        tf->tf_eflags |= FL_IOPL_MASK;
+    }
+}
+~~~
+
+**switch_to_kernel**:切换到内核态
+
+~~~c
+/* switch_to_kernel - switch to kernel mode by changing trap frame */
+static void
+switch_to_kernel(struct trapframe *tf) {
+    if (tf->tf_cs != KERNEL_CS) {
+        tf->tf_cs = KERNEL_CS;
+        tf->tf_ds = tf->tf_es = KERNEL_DS;
+        tf->tf_eflags &= ~FL_IOPL_MASK;
+    }
+}
+~~~
+
+在`trap_dispatch`中根据是`T_SWITCH_TOU`（切换到用户态）还是`T_SWITCH_TOK`（切换到内核态），来调用上面所写的两个函数
+
+~~~c
+case T_SWITCH_TOU:
+        switch_to_user(tf);
+        break;
+case T_SWITCH_TOK:
+        switch_to_kernel(tf);
+        //panic("T_SWITCH_** ??\n");
+        break;
+~~~
+
+**init.c**
+
+在`init.c`中完成内联汇编的代码，此处`lab1_switch_to_user`区别与`lab1_switch_to_kernel`的地方是：内核态到用户态的切换，需要从内核态栈中弹出用户态栈的`ss`和`esp`的值，为此在调用中断之前需要预留`8`字节的空间。因此需要写`"sub $0x8, %%esp \n"`语句。
+
+~~~c
+static void
+lab1_switch_to_user(void) {
+    //LAB1 CHALLENGE 1 : 2016010308
+    asm volatile (
+	    "sub $0x8, %%esp \n"
+	    "int %0 \n"
+	    "movl %%ebp, %%esp"
+	    : 
+	    : "i"(T_SWITCH_TOU)
+	);
+}
+static void
+lab1_switch_to_kernel(void) {
+    //LAB1 CHALLENGE 1 :  2016010308
+    asm volatile (
+        "int %0 \n"
+	    "movl %%ebp, %%esp \n"
+	    : 
+	    : "i"(T_SWITCH_TOK)
+    );
+}
+~~~
+
+##### make grade结果
+
+![](./makegrade.png)
 
 
-开了状态
 
-switch_to_user
 
-switch_to_kernel
-
-trap_dispatch
-
-​    //LAB1: CAHLLENGE 1 If you try to do it, uncomment lab1_switch_test()
-
-​    // user/kernel mode switch test
-
-​    lab1_switch_test();
 
 #### Challenge 2
+
+> 用键盘实现用户模式内核模式切换。具体目标是：“键盘输入3时切换到用户模式，键盘输入0时切换到内核模式”。 基本思路是借鉴软中断(syscall功能)的代码，并且把trap.c中软中断处理的设置语句拿过来。
+>
+
+`Challenge 2`只需要对外设键盘输入事件进行判断，如果是`0`就调用`Challenge 1`中的`switch_to_kernel`，如果是`3`就调用`Challenge 1`中的`switch_to_user`。同时根据题目提示利用`print_trapframe`来观察寄存器的值。
+
+##### 代码
+
+在`trap_dispatch`中添上如下代码：
+
+~~~c
+case IRQ_OFFSET + IRQ_KBD:
+        c = cons_getc();
+        cprintf("kbd [%03d] %c\n", c, c);
+        switch (c) {
+            case '0':
+                switch_to_kernel(tf);
+                print_trapframe(tf);
+                break;
+            case '3':
+                switch_to_user(tf);
+                print_trapframe(tf);
+                break;
+        }
+        break;
+~~~
+
+##### 运行结果
+
+我们发现内核态确实将`esp`和`ss`未压栈，结果和理论分析的一致。
+
+~~~c
+kbd [048] 0						
+trapframe at 0x7b5c
+  edi  0x00000001
+  esi  0x00000000
+  ebp  0x00007bc8
+  oesp 0x00007b7c
+  ebx  0x00010094
+  edx  0x00103667
+  ecx  0x00000000
+  eax  0x00000003
+  ds   0x----0010
+  es   0x----0010
+  fs   0x----0023
+  gs   0x----0023
+  trap 0x00000021 Hardware Interrupt
+  err  0x00000000
+  eip  0x00100073
+  cs   0x----0008
+  flag 0x00000206 PF,IF,IOPL=0
+kbd [000] 
+100 ticks
+100 ticks
+100 ticks
+kbd [051] 3
+trapframe at 0x7b5c
+  edi  0x00000001
+  esi  0x00000000
+  ebp  0x00007bc8
+  oesp 0x00007b7c
+  ebx  0x00010094
+  edx  0x00103667
+  ecx  0x00000000
+  eax  0x00000003
+  ds   0x----0023
+  es   0x----0023
+  fs   0x----0023
+  gs   0x----0023
+  trap 0x00000021 Hardware Interrupt
+  err  0x00000000
+  eip  0x00100073
+  cs   0x----001b
+  flag 0x00003206 PF,IF,IOPL=3
+  esp  0x0010361c
+  ss   0x----0023
+~~~
 
 
 
