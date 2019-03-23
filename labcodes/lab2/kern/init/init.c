@@ -9,7 +9,6 @@
 #include <intr.h>
 #include <pmm.h>
 #include <kmonitor.h>
-
 int kern_init(void) __attribute__((noreturn));
 void grade_backtrace(void);
 static void lab1_switch_test(void);
@@ -84,12 +83,12 @@ lab1_print_cur_status(void) {
 
 static void
 lab1_switch_to_user(void) {
-    //LAB1 CHALLENGE 1 : TODO
+    //LAB1 CHALLENGE 1 : 2016010308
 }
 
 static void
 lab1_switch_to_kernel(void) {
-    //LAB1 CHALLENGE 1 :  TODO
+    //LAB1 CHALLENGE 1 :  2016010308
 }
 
 static void
