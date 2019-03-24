@@ -304,6 +304,72 @@ if (prev != &free_list && p + p -> property == base) {
 
 ##### 设计思路与原理分析
 
+（1）**原理分析**：
+
+* 为了能够建立正确的地址映射关系，我们的`lab2`在链接阶段生成了`ucore`执行代码的虚地址，然后`bootloader`与`ucore`一起在运行时处理地址映射，最终实现段页式映射关系`virt addr = liner addr = phy addr +0xC0000000`。从`tools/kernel.ld`文件中我们得知`lab2`形成`ucore`的起始虚拟地址是从`0xC0100000`开始。
+* 系统采用了二级页表来建立线性地址与物理地址之间的映射关系。`default_pmm_manager`是我们的物理内存管理器，我们用它来实现动态分配和释放内存页的功能，我们也可以用它来获得所需要的空闲物理页。
+* 系统执行中地址映射分为三个阶段：
+  * 第一个阶段是开启保护模式，创建启动段表：这里虚拟地址、线性地址以及物理地址之间的映射关系与`lab1`的一样。
+  * 第二个阶段是创建初始页目录表，开启分页模式：这个阶段更新映射关系的同时将运行中的内核（EIP）从低虚拟地址“迁移”到高虚拟地址，而不造成伤害。
+  * 第三个阶段是完善段表和页表：`pmm_init`函数将页目录表项补充完成（扩充到`0~KMEMSIZE`）。然后，更新段映射机制，使用一个新的段表。新段表除了包括内核态的代码段和数据段描述符，还包括用户态的代码段和数据段描述符以及`TSS`段的描述符。
+
+（2）**设计思路**：
+
+首先要查询一级页表，根据线性地址`la`在一级页表`pgdir`中寻找二级页表的起始地址。如果二级页表不存在，那么要根据参数`create`来判断是否分配二级页表的内存空间，若不分配则返回空。
+
+`get_pte`函数是通过`PDT`的基址`pgdir`和线性地址`la`来获取`pte`。`PDX`根据`la`获取其页目录的索引，根据此索引可以得到页目录项`pde`，由于可能对其进行修改，这里采用指向`pde`的指针`pdep`，而`*pdep`中保存的便是`pde`的真实内容。创建了`pde`后，需要返回的值是`pte`的指针，这里先将`pde`中的地址转化为程序可用的虚拟地址。将这个地址转化为`pte`数据类型的指针，然后根据`la`的值索引出对应的`pte`表项。
+
+
+
+##### 代码及实现分析
+
+* 如果原本就有二级页表，或者新建立了页表，则只需返回对应项的地址即可
+
+  ~~~c
+  if (!(pgdir[PDX(la)] & PTE_P)) {
+      //......
+  }
+  return (pte_t *)KADDR(PDE_ADDR(pgdir[PDX(la)])) + PTX(la);
+  ~~~
+
+* 如果发现对应的二级页表不存在，那么我们需要根据参数`create`的值来处理是否创建新的二级页表
+
+  * 如果`create`的参数为0，则`get_pte`返回`NULL`
+
+  * 如果`create`的参数不为0
+
+    * 我们通过`alloc_page`来实现申请一个新的物理页的操作
+
+    ~~~c
+    struct Page *page;
+    if (!create || (page = alloc_page()) == NULL)
+        return NULL;
+    ~~~
+
+    * 再在一级页表中添加页目录项执行表示二级页表的新物理页(**代码解释见下面代码的注释**)
+
+      设一个`32bit`线性地址`la`有一个对应的`32bit`物理地址`pa`，如果在以`la`的高`10`位为索引值的页目录项中的存在位`（PTE_P）`为`0`，表示缺少对应的页表空间，则可通过`alloc_page`获得一个空闲物理页给页表，页表起始物理地址是按`4096`字节对齐的，这样填写页目录项的内容为`页目录项内容 = (页表起始物理地址 & ~0x0FFF) | PTE_U | PTE_W | PTE_P`
+
+    ~~~c
+    	//set page reference
+        set_page_ref(page, 1);
+    	//get linear address of page
+        uintptr_t pa = page2pa(page);
+    	//clear page content using memset
+        memset(KADDR(pa), 0, PGSIZE);
+    	//set page directory entry's permission
+        pgdir[PDX(la)] = (pa & ~0xFFF) | PTE_P | PTE_W | PTE_U;
+    }
+    ~~~
+
+
+
+#### 【练习2.2】
+
+> 请描述页目录项`（Page Directory Entry）`和页表项`（Page Table Entry）`中每个组成部分的含义以及对`ucore`而言的潜在用处。
+
+
+
 
 
 
