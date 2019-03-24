@@ -149,6 +149,19 @@ default_alloc_pages(size_t n) {
     return page;
 }
 
+
+//  *  (5.1)
+//  *      According to the base address of the withdrawed blocks, search the free
+//  *  list for its correct position (with address from low to high), and insert
+//  *  the pages. (May use `list_next`, `le2page`, `list_add_before`)
+//  *  (5.2)
+//  *      Reset the fields of the pages, such as `p->ref` and `p->flags` (PageProperty)
+//  *  (5.3)
+//  *      Try to merge blocks at lower or higher addresses. Notice: This should
+//  *  change some pages' `p->property` correctly.
+
+//'default_free_pages':re-link the pages into the free list, 
+// and may merge small free blocks into the big ones.
 static void
 default_free_pages(struct Page *base, size_t n) {
     assert(n > 0);
@@ -160,34 +173,52 @@ default_free_pages(struct Page *base, size_t n) {
     }
     base->property = n;
     SetPageProperty(base);
-    list_entry_t *le = list_next(&free_list);
-    while (le != &free_list) {
-        p = le2page(le, page_link);
-        le = list_next(le);
-        if (base + base->property == p) {
-            base->property += p->property;
-            ClearPageProperty(p);
-            list_del(&(p->page_link));
-        }
-        else if (p + p->property == base) {
+    //search the free list for its correct position 
+    list_entry_t *next_entry = list_next(&free_list);
+    while (next_entry != &free_list && le2page(next_entry, page_link) < base)
+        next_entry = list_next(next_entry);
+    //merge blocks at lower or higher addresses
+    list_entry_t *prev_entry = list_prev(next_entry);
+    list_entry_t *insert_entry = prev_entry;
+    if (prev_entry != &free_list) {
+        p = le2page(prev_entry, page_link);
+        if (p + p->property == base) {
             p->property += base->property;
             ClearPageProperty(base);
             base = p;
-            list_del(&(p->page_link));
+            insert_entry = list_prev(prev_entry);
+            list_del(prev_entry);
         }
     }
+    if (next_entry != &free_list) {
+        p = le2page(next_entry, page_link);
+        if (base + base->property == p) {
+            base->property += p->property;
+            ClearPageProperty(p);
+            list_del(next_entry);
+        }
+    }
+
+
+    // list_entry_t *le = list_next(&free_list);
+    // while (le != &free_list) {
+    //     p = le2page(le, page_link);
+    //     le = list_next(le);
+    //     if (base + base->property == p) {
+    //         base->property += p->property;
+    //         ClearPageProperty(p);
+    //         list_del(&(p->page_link));
+    //     }
+    //     else if (p + p->property == base) {
+    //         p->property += base->property;
+    //         ClearPageProperty(base);
+    //         base = p;
+    //         list_del(&(p->page_link));
+    //     }
+    // }
+    //insert into free list
     nr_free += n;
-    le = list_next(&free_list);
-    while (le != &free_list) {
-        p = le2page(le, page_link);
-        if (base + base->property <= p) {
-            assert(base + base->property != p);
-            break;
-        }
-        le = list_next(le);
-    }
-    list_add_before(le, &(base->page_link));
-    // list_add(&free_list, &(base->page_link));
+    list_add(&free_list, &(base->page_link));
 }
 
 static size_t
