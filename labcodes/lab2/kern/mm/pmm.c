@@ -326,7 +326,7 @@ pmm_init(void) {
 // return vaule: the kernel virtual address of this pte
 pte_t *
 get_pte(pde_t *pgdir, uintptr_t la, bool create) {
-    /* LAB2 EXERCISE 2: YOUR CODE
+    /* LAB2 EXERCISE 2: 2016010308
      *
      * If you need to visit a physical address, please use KADDR()
      * please read pmm.h for useful macros
@@ -359,6 +359,33 @@ get_pte(pde_t *pgdir, uintptr_t la, bool create) {
     }
     return NULL;          // (8) return page table entry
 #endif
+//(1) find page directory entry
+    pde_t *pdep = pgdir + PDX(la); 
+//(2) check if entry is not present
+    if (!(*pdep & PTE_P)) { 
+//(3) check if creating is needed, then alloc page for page table
+        if (create) { 
+            struct Page *page = alloc_page(); 
+            if (page != NULL) {
+//(4) set page reference
+                set_page_ref(page, 1); 
+//(5) get linear address of page
+                pte_t page_la = KADDR(page2pa(page)); 
+//(6) clear page content using memset
+                memset(page_la, 0, PGSIZE); 
+//(7) set page directory entry's permission
+                *pdep = page2pa(page) | PTE_P | PTE_W | PTE_U; 
+//(8) return page table entry
+                return ((pte_t *)(KADDR(PDE_ADDR(*pdep)))) + PTX(la); 
+            } else {
+                return NULL;
+            }
+        } else {
+            return NULL;
+        }
+    }
+//(8) return page table entry
+    return ((pte_t *)(KADDR(PDE_ADDR(*pdep)))) + PTX(la); 
 }
 
 //get_page - get related Page struct for linear address la using PDT pgdir
