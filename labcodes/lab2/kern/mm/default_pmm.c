@@ -129,6 +129,7 @@ default_alloc_pages(size_t n) {
     }
     struct Page *page = NULL;
     list_entry_t *le = &free_list;
+    //(1)find the first block no shorter than n
     while ((le = list_next(le)) != &free_list) {
         struct Page *p = le2page(le, page_link);
         if (p->property >= n) {
@@ -136,89 +137,68 @@ default_alloc_pages(size_t n) {
             break;
         }
     }
+    //(2)if we can find the suitable block
+    //* if its length > n, re-calculate number of the rest pages of this free block. 
+    //* Re-caluclate `nr_free`
     if (page != NULL) {
-        list_del(&(page->page_link));
+        //list_del(&(page->page_link));
         if (page->property > n) {
             struct Page *p = page + n;
             p->property = page->property - n;
-            list_add(&free_list, &(p->page_link));
+            SetPageProperty(p); //some property may change
+            //list_add(&free_list, &(p->page_link));
+            list_add_after(&(page->page_link), &(p->page_link));
     }
+        list_del(&(page->page_link)); //delete the page_link
         nr_free -= n;
         ClearPageProperty(page);
     }
     return page;
 }
 
-
-//  *  (5.1)
-//  *      According to the base address of the withdrawed blocks, search the free
-//  *  list for its correct position (with address from low to high), and insert
-//  *  the pages. (May use `list_next`, `le2page`, `list_add_before`)
-//  *  (5.2)
-//  *      Reset the fields of the pages, such as `p->ref` and `p->flags` (PageProperty)
-//  *  (5.3)
-//  *      Try to merge blocks at lower or higher addresses. Notice: This should
-//  *  change some pages' `p->property` correctly.
-
-//'default_free_pages':re-link the pages into the free list, 
-// and may merge small free blocks into the big ones.
+// re-link the pages into the free list, and may merge small free blocks into the big ones.
 static void
 default_free_pages(struct Page *base, size_t n) {
     assert(n > 0);
     struct Page *p = base;
+
+    // check page property of each block
     for (; p != base + n; p ++) {
         assert(!PageReserved(p) && !PageProperty(p));
         p->flags = 0;
         set_page_ref(p, 0);
     }
+    //set the size of free area and page property
     base->property = n;
     SetPageProperty(base);
-    //search the free list for its correct position 
-    list_entry_t *next_entry = list_next(&free_list);
-    while (next_entry != &free_list && le2page(next_entry, page_link) < base)
-        next_entry = list_next(next_entry);
-    //merge blocks at lower or higher addresses
-    list_entry_t *prev_entry = list_prev(next_entry);
-    list_entry_t *insert_entry = prev_entry;
-    if (prev_entry != &free_list) {
-        p = le2page(prev_entry, page_link);
-        if (p + p->property == base) {
-            p->property += base->property;
-            ClearPageProperty(base);
-            base = p;
-            insert_entry = list_prev(prev_entry);
-            list_del(prev_entry);
-        }
-    }
-    if (next_entry != &free_list) {
-        p = le2page(next_entry, page_link);
+    list_entry_t *le = list_next(&free_list);
+    while (le != &free_list) {
+        p = le2page(le, page_link);
+        le = list_next(le);
         if (base + base->property == p) {
             base->property += p->property;
             ClearPageProperty(p);
-            list_del(next_entry);
+            list_del(&(p->page_link));
+        }
+        else if (p + p->property == base) {
+            p->property += base->property;
+            ClearPageProperty(base);
+            base = p;
+            list_del(&(p->page_link));
         }
     }
-
-
-    // list_entry_t *le = list_next(&free_list);
-    // while (le != &free_list) {
-    //     p = le2page(le, page_link);
-    //     le = list_next(le);
-    //     if (base + base->property == p) {
-    //         base->property += p->property;
-    //         ClearPageProperty(p);
-    //         list_del(&(p->page_link));
-    //     }
-    //     else if (p + p->property == base) {
-    //         p->property += base->property;
-    //         ClearPageProperty(base);
-    //         base = p;
-    //         list_del(&(p->page_link));
-    //     }
-    // }
-    //insert into free list
     nr_free += n;
-    list_add(&free_list, &(base->page_link));
+    le = list_next(&free_list);
+    while (le != &free_list) {
+        p = le2page(le, page_link);
+        if (base + base->property <= p) {
+            assert(base + base->property != p);
+            break;
+        }
+        le = list_next(le);
+    }
+    list_add_before(le, &(base->page_link));
+    // list_add(&free_list, &(base->page_link));
 }
 
 static size_t

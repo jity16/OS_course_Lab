@@ -50,7 +50,100 @@ default_init_memmap(struct Page *base, size_t n) {
 }
 ~~~
 
+~~~c
+static struct Page *
+default_alloc_pages(size_t n) {
+    assert(n > 0);
+    if (n > nr_free) {
+        return NULL;
+    }
+    struct Page *page = NULL;
+    list_entry_t *le = &free_list;
+    while ((le = list_next(le)) != &free_list) {
+        struct Page *p = le2page(le, page_link);
+        if (p->property >= n) {
+            page = p;
+            break;
+        }
+    }
+    if (page != NULL) {
+        list_del(&(page->page_link));
+        if (page->property > n) {
+            struct Page *p = page + n;
+            p->property = page->property - n;
+            list_add(&free_list, &(p->page_link));
+    }
+        nr_free -= n;
+        ClearPageProperty(page);
+    }
+    return page;
+}
+~~~
 
+
+
+~~~c
+//'default_free_pages':re-link the pages into the free list, 
+// and may merge small free blocks into the big ones.
+static void
+default_free_pages(struct Page *base, size_t n) {
+    assert(n > 0);
+    struct Page *p = base;
+    for (; p != base + n; p ++) {
+        assert(!PageReserved(p) && !PageProperty(p));
+        p->flags = 0;
+        set_page_ref(p, 0);
+    }
+    base->property = n;
+    SetPageProperty(base);
+    //search the free list for its correct position 
+    list_entry_t *next_entry = list_next(&free_list);
+    while (next_entry != &free_list && le2page(next_entry, page_link) < base)
+        next_entry = list_next(next_entry);
+    //merge blocks at lower or higher addresses
+    list_entry_t *prev_entry = list_prev(next_entry);
+    list_entry_t *insert_entry = prev_entry;
+    if (prev_entry != &free_list) {
+        p = le2page(prev_entry, page_link);
+        if (p + p->property == base) {
+            p->property += base->property;
+            ClearPageProperty(base);
+            base = p;
+            insert_entry = list_prev(prev_entry);
+            list_del(prev_entry);
+        }
+    }
+    if (next_entry != &free_list) {
+        p = le2page(next_entry, page_link);
+        if (base + base->property == p) {
+            base->property += p->property;
+            ClearPageProperty(p);
+            list_del(next_entry);
+        }
+    }
+
+
+    // list_entry_t *le = list_next(&free_list);
+    // while (le != &free_list) {
+    //     p = le2page(le, page_link);
+    //     le = list_next(le);
+    //     if (base + base->property == p) {
+    //         base->property += p->property;
+    //         ClearPageProperty(p);
+    //         list_del(&(p->page_link));
+    //     }
+    //     else if (p + p->property == base) {
+    //         p->property += base->property;
+    //         ClearPageProperty(base);
+    //         base = p;
+    //         list_del(&(p->page_link));
+    //     }
+    // }
+    //insert into free list
+    nr_free += n;
+    list_add(&free_list, &(base->page_link));
+}
+~~~
 
 
 
