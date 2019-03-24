@@ -174,11 +174,123 @@ while ((le = list_next(le)) != &free_list) {
           nr_free -= n;							//更新空闲块数量
           ClearPageProperty(page);
       }
-      return page;
-  }
   ~~~
 
-  
+返回找到的`page`
+
+~~~c
+    return page;
+}
+~~~
+
+
+
+**（2）`default_free_pages`函数**
+
+**思路**
+
+`default_free_pages`函数是`default_alloc_pages`函数的逆过程.。
+
+将需要释放的空间标记为空之后，需要找到空闲表中合适的位置。由于空闲表中的记录都是按照物理页地址排序的，所以如果插入位置的前驱或者后继刚好和释放后的空间邻接，那么需要将新的空间与前后邻接的空间合并形成更大的空间。
+
+对前方和后方可能出现的连续空闲块进行合并时就需要从头开始搜索`free_list`链表，找到和释放空间可以拼接的前一块和后一块，此时需要注意依然要保持顺序性。
+
+`property`位当该`Page`处于`free_list`中时有效，代表了该`block`中闲置页的个数（包括当前页），而`flags`中的`property`位则被主要用作判断页是否已经被占用。
+
+**代码**
+
+断言`n>0`方便快速检查
+
+~~~c
+static void
+default_free_pages(struct Page *base, size_t n) {
+    assert(n > 0);
+    struct Page *p = base;
+~~~
+
+首先检查每个块中的各个`page property`是否合法
+
+~~~ c
+for (; p != base + n; p ++) {
+    assert(!PageReserved(p) && !PageProperty(p));
+    p->flags = 0;
+    set_page_ref(p, 0);
+}
+~~~
+
+然后设置好释放空间的长度和`page property`
+
+~~~c
+base->property = n;
+SetPageProperty(base);
+~~~
+
+找到插入链表的位置（链表已按照地址从大到小排序）
+
+~~~c
+list_entry_t *le = list_next(&free_list);
+list_entry_t *prev = &free_list;   
+while (le != &free_list) {
+    p = le2page(le, page_link);
+    if (base < p) {
+        break;
+    }
+    prev = le;
+    le = list_next(le);
+}
+~~~
+
+检查是否可以和链表的前一项中的空间合并
+
+~~~c
+p = le2page(prev, page_link);
+if (prev != &free_list && p + p -> property == base) {
+    p -> property += base -> property;
+    ClearPageProperty(base);
+} else {
+    list_add_after(prev, &(base -> page_link));
+    p = base;
+}
+~~~
+
+检查是否可以和链表的后一项中的空间合并
+
+~~~c
+    struct Page *nextp = le2page(le, page_link);
+    if (le != &free_list && p + p -> property == nextp) {
+        p -> property += nextp -> property;
+        ClearPageProperty(nextp);
+        list_del(le);
+    }
+    nr_free += n;
+}
+~~~
+
+
+
+##### 【练习1.2】
+
+> 你的first fit算法是否有进一步的改进空间？
+
+**（1）优化有序链表插入**
+
+我们发现链表查找和有序链表插入是有&Omicron;(n)的复杂度。
+
+在特殊情况下我们可以优化有序链表插入。比如在下面的情况中，对于一个刚刚被释放的内存，加入它的邻接空间都是空闲的，我们是无须对它进行链表插入操作的，而是直接合并到邻接空间中，这样的话复杂度是&Omicron;(1)。
+
+如果要实现这种优化的话，我们要同时在第一个页面和最后一个页面都保存空闲块的信息，这样一来，新的空闲块只需要检查邻接的两个页面就能判断邻接空间块的状态。
+
+**（2）优化链表查找**
+
+我们发现链表查找也是有&Omicron;(n)的复杂度。
+
+如果在每一块连续内存的头指针中，增加一个保存指向这段连续内存的末页的指针变量，则在分配内存查找满足条件的内存块时，遇到空间不够的内存块可以直接跳跃到其末页再继续查找，而不需要依次遍历这段内存块的内部。同样的道理，释放内存后，被释放的内存块在向前合并时，如果在每一块连续内存的末页保存其块大小，同样可以直接完成合并而不需要依次遍历。
+
+**（3）换数据结构**
+
+可以用各种树状结构来代替双向链表实现操作。查找的时候比如进行二分查找，可以优化到&Omicron;(logn)。
+
+
 
 
 
