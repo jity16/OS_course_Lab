@@ -159,46 +159,91 @@ default_alloc_pages(size_t n) {
 // re-link the pages into the free list, and may merge small free blocks into the big ones.
 static void
 default_free_pages(struct Page *base, size_t n) {
+    // assert(n > 0);
+    // struct Page *p = base;
+
+    // // check page property of each block
+    // for (; p != base + n; p ++) {
+    //     assert(!PageReserved(p) && !PageProperty(p));
+    //     p->flags = 0;
+    //     set_page_ref(p, 0);
+    // }
+    // //set the size of free area and page property
+    // base->property = n;
+    // SetPageProperty(base);
+    // list_entry_t *le = list_next(&free_list);
+    // while (le != &free_list) {
+    //     p = le2page(le, page_link);
+    //     le = list_next(le);
+    //     if (base + base->property == p) {
+    //         base->property += p->property;
+    //         ClearPageProperty(p);
+    //         list_del(&(p->page_link));
+    //     }
+    //     else if (p + p->property == base) {
+    //         p->property += base->property;
+    //         ClearPageProperty(base);
+    //         base = p;
+    //         list_del(&(p->page_link));
+    //     }
+    // }
+    // nr_free += n;
+    // le = list_next(&free_list);
+    // while (le != &free_list) {
+    //     p = le2page(le, page_link);
+    //     if (base + base->property <= p) {
+    //         assert(base + base->property != p);
+    //         break;
+    //     }
+    //     le = list_next(le);
+    // }
+    // list_add_before(le, &(base->page_link));
+    // // list_add(&free_list, &(base->page_link));
     assert(n > 0);
     struct Page *p = base;
 
-    // check page property of each block
+// 原来的代码，检查每个block中的各个page property是否合法
     for (; p != base + n; p ++) {
         assert(!PageReserved(p) && !PageProperty(p));
         p->flags = 0;
         set_page_ref(p, 0);
     }
-    //set the size of free area and page property
+
+// 原来的代码，设置好释放空间的长度和page property
     base->property = n;
     SetPageProperty(base);
+
+// Step1：找到插入链表的位置（链表已按照地址从大到小排序）
     list_entry_t *le = list_next(&free_list);
+    list_entry_t *prev = &free_list;
     while (le != &free_list) {
         p = le2page(le, page_link);
-        le = list_next(le);
-        if (base + base->property == p) {
-            base->property += p->property;
-            ClearPageProperty(p);
-            list_del(&(p->page_link));
-        }
-        else if (p + p->property == base) {
-            p->property += base->property;
-            ClearPageProperty(base);
-            base = p;
-            list_del(&(p->page_link));
-        }
-    }
-    nr_free += n;
-    le = list_next(&free_list);
-    while (le != &free_list) {
-        p = le2page(le, page_link);
-        if (base + base->property <= p) {
-            assert(base + base->property != p);
+        if (base < p) {
             break;
         }
+        prev = le;
         le = list_next(le);
     }
-    list_add_before(le, &(base->page_link));
-    // list_add(&free_list, &(base->page_link));
+
+// Step2：检查是否可以和链表的前一项中的空间合并
+    p = le2page(prev, page_link);
+    if (prev != &free_list && p + p -> property == base) {
+        p -> property += base -> property;
+        ClearPageProperty(base);
+    } else {
+        list_add_after(prev, &(base -> page_link));
+        p = base;
+    }
+
+// Step3：检查是否可以和链表的后一项中的空间合并
+    struct Page *nextp = le2page(le, page_link);
+    if (le != &free_list && p + p -> property == nextp) {
+        p -> property += nextp -> property;
+        ClearPageProperty(nextp);
+        list_del(le);
+    }
+
+    nr_free += n;
 }
 
 static size_t
