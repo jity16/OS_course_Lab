@@ -424,15 +424,18 @@ if (prev != &free_list && p + p -> property == base) {
 
 ~~~c
 //(1) check if this page table entry is present
-if (*ptep & PTE_P) {
+if (*ptep & PTE_P) { 
     	//(2) find corresponding page to pte
-        struct Page *page = pte2page(*ptep);
+        struct Page *page = pte2page(*ptep); 
     	//(3) decrease page reference
-        if (page_ref_dec(page) == 0) {
-            //(4) and free this page when page reference reachs 0
+        page_ref_dec(page);
+    	//(4) and free this page when page reference reachs 0
+        if (page -> ref == 0) {
             free_page(page);
         }
+    	///(5) clear second page table entry
         *ptep = 0;
+    	//(6) flush tlb
         tlb_invalidate(pgdir, la);
     }
 ~~~
@@ -441,3 +444,8 @@ if (*ptep & PTE_P) {
 
 
 
+> 数据结构`Page`的全局变量（其实是一个数组）的每一项与页表中的页目录项和页表项有无对应关系？如果有，其对应关系是啥？
+
+对应关系是：页目录项保存的物理页面地址（即某个页表）以及页表项保存的物理页面地址都对应于Page数组中的某一页。
+
+具体而言，就是页目录项和页表项中都保存着一个物理页面的地址，对于页目录项，这个物理页面是页表的地址，对于页表，这个物理页面表示已经分配的物理页。每一个物理页面在Page数组中都有相应的记录，保存着该物理页是否被分配，被引用的数量和是否被内核保留等信息。
