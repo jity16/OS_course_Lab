@@ -402,7 +402,40 @@ if (prev != &free_list && p + p -> property == base) {
 
 
 
+---
 
+### （三）释放某虚地址所在的页并取消对应二级页表项的映射
+
+#### 【练习3.1】
+
+> 当释放一个包含某虚地址的物理内存页时，需要让对应此物理内存页的管理数据结构`Page`做相关的清除处理，使得此物理内存页成为空闲；另外还需把表示虚地址与物理地址对应关系的二级页表项清除。请仔细查看和理解`page_remove_pte`函数中的注释。为此，需要补全在 `kern/mm/pmm.c`中的`page_remove_pte`函数。
+
+**设计思路**
+
+（1）首先我们讨论取消页表映射过程，我们需要将物理页的引用数目减一，如果变为零，那么释放页面；然后再将页目录项清零；最后我们还需要刷新TLB。
+
+（2）根据上述思路我们需要做的：我们主要要实现page_remove_pte函数来完成取消页表映射的功能，因此我们先释放`la`地址所指向的页，并设置对应的`pte`的值。首先我们要确保页存在,找到`pte`所在的页,把`pte`所在页的`ref`减一。如果该页`ref`为0，则释放`pte`所在的页，再清空`TLB`。
+
+
+
+**实验代码**
+
+根据注释提示的步骤，我们可以写出下面的代码（**步骤注释见下面**）
+
+~~~c
+//(1) check if this page table entry is present
+if (*ptep & PTE_P) {
+    	//(2) find corresponding page to pte
+        struct Page *page = pte2page(*ptep);
+    	//(3) decrease page reference
+        if (page_ref_dec(page) == 0) {
+            //(4) and free this page when page reference reachs 0
+            free_page(page);
+        }
+        *ptep = 0;
+        tlb_invalidate(pgdir, la);
+    }
+~~~
 
 
 
