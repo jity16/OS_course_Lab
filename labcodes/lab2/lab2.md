@@ -368,7 +368,29 @@ if (prev != &free_list && p + p -> property == base) {
 
 > 请描述页目录项`（Page Directory Entry）`和页表项`（Page Table Entry）`中每个组成部分的含义以及对`ucore`而言的潜在用处。
 
+我们从`mmh.h`中观察`PDE`和`PTE`的内容定义，其中列出了页目录项和页表项的入口标志字段。
 
+因为页的映射是以物理页面为单位进行，所以页面对应的物理地址总是按照`4096`字节对齐的，物理地址低`0-11`位总是零，所以在页目录项和页表项中，低`0-11`位可以用于作为标志字段使用。
+
+~~~c
+/* page table/directory entry flags */
+#define PTE_P           0x001                   // 当前项是否存在，用于判断缺页
+#define PTE_W           0x002                   // 当前项是否可写，标志权限
+#define PTE_U           0x004                   // 用户是否可获取，标志权限
+#define PTE_PWT         0x008                   // 写直达缓存机制,硬件使用Write Through
+#define PTE_PCD         0x010                   // 禁用缓存，硬件使用Cache-Disable
+#define PTE_A           0x020                   // 访问标志（Accessed）
+#define PTE_D           0x040                   // 页是否被修改，硬件使用（dirty)
+#define PTE_PS          0x080                   // 页大小
+#define PTE_MBZ         0x180                   // 必须为0的位
+#define PTE_AVAIL       0xE00                   // 软件使用的位，可任意设置            
+~~~
+
+高`12-31`位是`Page Table 4KB Aligned Address`，也就是对应的页表地址。
+
+
+
+#### 【练习2.3】
 
 
 
