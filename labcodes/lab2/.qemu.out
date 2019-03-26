@@ -1,0 +1,48 @@
+(THU.CST) os is loading ...
+
+Special kernel symbols:
+  entry  0xc0100036 (phys)
+  etext  0xc0105e38 (phys)
+  edata  0xc011a000 (phys)
+  end    0xc011af28 (phys)
+Kernel executable memory footprint: 108KB
+ebp:0xc0116f38 eip:0xc01009dc args:0x00010094 0x00000000 0xc0116f68 0xc01000c8 
+    kern/debug/kdebug.c:309: print_stackframe+21
+ebp:0xc0116f48 eip:0xc0100ccb args:0x00000000 0x00000000 0x00000000 0xc0116fb8 
+    kern/debug/kmonitor.c:129: mon_backtrace+10
+ebp:0xc0116f68 eip:0xc01000c8 args:0x00000000 0xc0116f90 0xffff0000 0xc0116f94 
+    kern/init/init.c:48: grade_backtrace2+33
+ebp:0xc0116f88 eip:0xc01000f1 args:0x00000000 0xffff0000 0xc0116fb4 0x0000002a 
+    kern/init/init.c:53: grade_backtrace1+38
+ebp:0xc0116fa8 eip:0xc010010f args:0x00000000 0xc0100036 0xffff0000 0x0000001d 
+    kern/init/init.c:58: grade_backtrace0+23
+ebp:0xc0116fc8 eip:0xc0100134 args:0xc0105e5c 0xc0105e40 0x00000f28 0x00000000 
+    kern/init/init.c:63: grade_backtrace+34
+ebp:0xc0116ff8 eip:0xc010008b args:0xc0105ff0 0xc0105ff8 0xc0100c51 0xc0106017 
+    kern/init/init.c:28: kern_init+84
+memory management: default_pmm_manager
+e820map:
+  memory: 0009fc00, [00000000, 0009fbff], type = 1.
+  memory: 00000400, [0009fc00, 0009ffff], type = 2.
+  memory: 00010000, [000f0000, 000fffff], type = 2.
+  memory: 07efe000, [00100000, 07ffdfff], type = 1.
+  memory: 00002000, [07ffe000, 07ffffff], type = 2.
+  memory: 00040000, [fffc0000, ffffffff], type = 2.
+kernel panic at kern/mm/default_pmm.c:320:
+    assertion failed: (p0 = alloc_page()) == p2 - 1
+stack trackback:
+ebp:0xc0116e98 eip:0xc01009dc args:0xc0106124 0xc0116edc 0x00000140 0xc011d29c 
+    kern/debug/kdebug.c:309: print_stackframe+21
+ebp:0xc0116ec8 eip:0xc0100d3c args:0xc010658b 0x00000140 0xc0106576 0xc0106862 
+    kern/debug/panic.c:27: __panic+105
+ebp:0xc0116f68 eip:0xc01038d9 args:0xc0106984 0xc01068d4 0xffff0000 0x00010094 
+    kern/mm/default_pmm.c:320: default_check+1151
+ebp:0xc0116f88 eip:0xc010465b args:0x00000000 0xffff0000 0xc0116fb4 0x0000002a 
+    kern/mm/pmm.c:458: check_alloc_page+15
+ebp:0xc0116fc8 eip:0xc01043ff args:0xc0105e5c 0xc0105e40 0x00000f28 0x00000000 
+    kern/mm/pmm.c:292: pmm_init+85
+ebp:0xc0116ff8 eip:0xc0100090 args:0xc0105ff0 0xc0105ff8 0xc0100c51 0xc0106017 
+    kern/init/init.c:30: kern_init+89
+Welcome to the kernel debug monitor!!
+Type 'help' for a list of commands.
+K> 
