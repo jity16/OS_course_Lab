@@ -113,3 +113,64 @@ CPU在执行完一个指令后开始读取中断信号，获取到中断index及
 （3）**完成中断处理**
 
 每个中断服务例程在有中断处理工作完成后需要通过`iret`（或`iretd`）指令恢复被打断的程序的执行。恢复现场保存信息，并完成特权级的转换。回到出现异常的语句继续执行。
+
+
+
+---
+
+### 练习2：补充完成基于FIFO的页面替换算法
+
+#### 【练习2.1】
+
+> 完成`vmm.c`中的`do_pgfault`函数，并且在实现`FIFO`算法的`swap_fifo.c`中完成`map_swappable`和`swap_out_victim`函数。通过对`swap`的测试。
+
+##### 步骤分析与代码实现
+
+（1）在练习1中我们知道，如果`pte`的值为0（这表示无效，即没有对应的物理页面），则分配一个物理页面。
+
+如果不是`0`，由于这里已经进入了`do_pgfault`处理流程，那么产生缺页错误的原因只可能是页面不在内存中而在磁盘上，我们需要从磁盘中调入相应的页面。
+
+`swap_in`函数定义在`swap.c`中，将根据`mm`和`addr`来获取`pte`（同样使用`get_pte`函数），然后根据`pte`中的内容去磁盘中调入该页面，存放在新分配的一个物理`Page`中（传入的`page`参数就更新为这个新分配的物理页面）。然后`page_insert`会建立该虚拟地址到物理页面的映射（修改页表）。最后标记该`page`为`swappable`。
+
+~~~c
+else{
+        if(swap_init_ok) {
+            struct Page *page=NULL;
+            //(1）According to the mm AND addr, try to load the content of right disk page
+            //    into the memory which page managed.
+            swap_in(mm, addr, &page);
+            page_insert(mm->pgdir, page, addr, perm); 
+            //(3) make the page swappable.
+            swap_map_swappable(mm, addr, page, 1);
+            page->pra_vaddr = addr;
+        }else {
+            cprintf("no swap_init_ok but ptep is %x, failed\n",*ptep);
+            return ret;
+        }
+    }
+~~~
+
+
+
+（2）由于`FIFO`基于双向链表实现，所以只需要将元素插入到头节点之前。
+
+在`_fifo_map_swappable`函数中根据注释添加如下代码，将最近访问过的页面添加到链表的头部，即插入到`head`的后面，就成为链表的第一个。
+
+~~~c
+//(1)link the most recent arrival page at the back of the pra_list_head qeueue.
+list_add(head, entry);
+~~~
+
+（3）`_fifo_swap_out_victim`中需要选出一个作为换出，这里取出的是链表的尾部，由于这里是双向链表,我们使用`head->prev`来获取。下面的`le`就是要换出的那个`Page`。然后从链表中将`le`删除掉。
+
+~~~c
+//(1)  unlink the  earliest arrival page in front of pra_list_head qeueue
+list_entry_t *le = head->prev;
+assert(head!=le);
+struct Page *p = le2page(le, pra_page_link);
+list_del(le);
+assert(p !=NULL);
+//(2)  assign the value of *ptr_page to the addr of this page
+*ptr_page = p;
+~~~
+
