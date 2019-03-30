@@ -408,6 +408,21 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
             return ret;
         }
     }
+    else{
+        if(swap_init_ok) {
+            struct Page *page=NULL;
+            //(1）According to the mm AND addr, try to load the content of right disk page
+            //    into the memory which page managed.
+            swap_in(mm, addr, &page);
+            page_insert(mm->pgdir, page, addr, perm); 
+            //(3) make the page swappable.
+            swap_map_swappable(mm, addr, page, 1);
+            page->pra_vaddr = addr;
+        }else {
+            cprintf("no swap_init_ok but ptep is %x, failed\n",*ptep);
+            return ret;
+        }
+    }
 
 
    ret = 0;
