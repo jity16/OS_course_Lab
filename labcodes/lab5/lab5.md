@@ -12,9 +12,11 @@
 
 #### LAB1 修改
 
-（1）增加功能：为用户态设置中断向量表。
+（1）**增加功能**：为用户态设置中断向量表。
 
-在`idt_init`函数中添加如下代码(`T_SYSCALL`这个`trap`的特权级应当是`DPL_USER`)
+**原理**：在执行加载中断描述符表`lidt`指令前，专门设置了一个特殊的中断描述符`idt[T_SYSCALL]`，它的特权级设置为`DPL_USER`，中断向量处理地址在`_vectors[T_SYSCALL]`处。这样建立好这个中断描述符后，一旦用户进程执行`INT T_SYSCALL`后，由于此中断允许用户态进程产生（注意它的特权级设置为`DPL_USER`），所以`CPU`就会从用户态切换到内核态，保存相关寄存器，并跳转到`_vectors[T_SYSCALL]`处开始执行，
+
+**代码**：在`idt_init`函数中添加如下代码(`T_SYSCALL`这个`trap`的特权级应当是`DPL_USER`)
 
 ~~~c
 //let user app to use syscall to get the service of ucore
@@ -22,7 +24,9 @@
 SETGATE(idt[T_SYSCALL], 1, GD_KTEXT, __vectors[T_SYSCALL], DPL_USER);
 ~~~
 
-（2）增加功能：需要更改对于时钟中断的处理。
+
+
+（2）**增加功能**：需要更改对于时钟中断的处理。
 
 在`trap_dispatch`函数中添加代码：当到时间片结束时需要将当前进程的`need_resched`设置为`1`，表示需要被切换的进程。
 
@@ -82,6 +86,22 @@ set_links(proc);
 >
 > 请在实验报告中简要说明你的设计实现过程。
 
+**原理分析**
+
+我们需要设置新创建用户进程的`trapframe`中的内容，以便该进程在从内核态中返回后，能够正确地在用户态执行。为了在`trap`返回时能够从内核态进入用户态，代码段寄存器`CS`必须要设置为`USER_CS`，`USER_CS`中对应设置的`DPL`为`3`（表示用户态）。这样在执行`iret`指令时，会发现当前特权级(0)小于将要`pop`出的`CS`的特权级(3)，说明要发生特权级的转换，因此会再`pop`出`SS`和`esp`。
+
+然后就是将`DS，ES，SS`等都设置为`USER_DS`，将`esp`设置为`USTACKTOP`（即用户地址空间的栈顶），`eip`设置为加载的程序的入口地址。
+
+**具体实现**
+
+我们可以从注释中知道需要进行如下设置：
+
+* `tf_cs`设置为用户态代码段的段选择子
+* `tf_ds、tf_es、tf_ss`均设置为用户态数据段的段选择子
+* `tf_esp`设置为用户栈的栈顶
+* `tf_eip`设置为`ELF`文件的入口`e_entry`
+* `tf_eflags`使能中断位
+
 ~~~c
 tf->tf_cs = USER_CS;
 tf->tf_ds = tf->tf_es = tf->tf_ss = USER_DS;
@@ -89,14 +109,6 @@ tf->tf_esp = USTACKTOP;
 tf->tf_eip = elf->e_entry;
 tf->tf_eflags = FL_IF; 
 ~~~
-
-
-
-
-
-
-
-
 
 
 
