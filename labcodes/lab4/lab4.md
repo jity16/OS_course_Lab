@@ -128,6 +128,8 @@ memset(proc->name, 0, PROC_NAME_LEN);
 
 
 
+#### 【练习1.2】
+
 > 请说明`proc_struct`中`struct context context`和`struct trapframe *tf`成员变量含义和在本实验中的作用是啥？
 
 **（1）context含义和作用**:
@@ -158,3 +160,126 @@ struct context {
 我们在进程切换的过程中，切换入口函数会将模拟一个中断返回，并将当前的`esp`定位在这个`trapframe`上，这样在处理完中断弹出后就可以直接从这个`trapframe`中恢复出进程真正的`esp`和`eip`，从而进程真正的程序运行；
 
 进程切换的时候，一定会发生中断，进入内核态，故需要保存中断产生的栈帧的信息。`trapframe`结构体就是用来保存这些信息的，储存各段寄存器，以及发生中断时被硬件压栈的若干寄存器（`err，eip，cs，eflags，esp，ss`），表示当前中断产生的栈帧。
+
+---
+
+
+
+### 练习2：为新创建的内核线程分配资源
+
+#### 【练习2.1】
+
+> 创建一个内核线程需要分配和设置好很多资源。`kernel_thread`函数通过调用`do_fork`函数完成具体内核线程的创建工作。`do_kernel`函数会调用`alloc_proc`函数来分配并初始化一个进程控制块，但`alloc_proc`只是找到了一小块内存用以记录进程的必要信息，并没有实际分配这些资源。`ucore`一般通过`do_fork`实际创建新的内核线程。`do_fork`的作用是，创建当前内核线程的一个副本，它们的执行上下文、代码、数据都一样，但是存储位置不同。在这个过程中，需要给新内核线程分配资源，并且复制原进程的状态。你需要完成在`kern/process/proc.c`中的`do_fork`函数中的处理过程。
+
+##### 原理和实现分析
+
+`kernel_thread`函数采用了局部变量`tf`来放置保存内核线程的临时中断帧，并把中断帧的指针传递给`do_fork`函数，而`do_fork`函数会调用`copy_thread`函数来在新创建的进程内核栈上专门给进程的中断帧分配一块空间。
+
+`do_fork`是创建线程的主要函数。`kernel_thread`函数通过调用`do_fork`函数最终完成了内核线程的创建工作。下面我们来分析一下`do_fork`函数的实现，`do_fork`函数主要做了以下事情：
+
+1. 分配并初始化进程控制块（`alloc_proc`函数）；
+2. 分配并初始化内核栈（`setup_stack`函数）；
+3. 根据`clone_flag`标志复制或共享进程内存管理结构（`copy_mm`函数）；
+4. 设置进程在内核（将来也包括用户态）正常运行和调度所需的中断帧和执行上下文（`copy_thread`函数）；
+5. 把设置好的进程控制块放入`hash_list`和`proc_list`两个全局进程链表中；
+6. 自此，进程已经准备好执行了，把进程状态设置为“就绪”态；
+7. 设置返回码为子进程的`id`号。
+
+##### 具体代码和步骤解释
+
+我们根据平台提供的注释提示的步骤实现了如下的代码，下面的注释部分解释了每段代码的含义
+
+~~~c
+// 分配进程控制块（此时PCB还没有初始化）
+proc = alloc_proc();
+if (proc == NULL) {
+  goto fork_out;
+}
+// 为PCB指定父进程
+proc->parent = current;
+// 分配两个页的内核栈空间给这个新的进程控制块
+if (setup_kstack(proc) != 0) {
+  goto bad_fork_cleanup_proc;
+}
+// 拷贝mm_struct，建立新进程的地址映射关系
+if (copy_mm(clone_flags, proc) != 0) {
+  goto bad_fork_cleanup_kstack;
+}
+// 拷贝父进程的trapframe，并为子进程设置返回值为0
+copy_thread(proc, stack, tf);
+// 中断可能由时钟产生，会使得调度器工作，为了避免产生错误，需要屏蔽中断
+bool intr_flag;
+local_intr_save(intr_flag);
+{
+  // 建立新的哈希链表
+    proc->pid = get_pid();
+    hash_proc(proc);
+    list_add(&proc_list, &(proc->list_link));
+    nr_process ++;
+}
+local_intr_restore(intr_flag);
+// 唤醒进程，转为PROC_RUNNABLE状态
+wakeup_proc(proc);
+// 父进程应该返回子进程的pid
+ret = proc->pid;
+~~~
+
+
+
+#### 【练习2.2】
+
+> 请说明`ucore`是否做到给每个新`fork`的线程一个唯一的`id`？请说明你的分析和理由。
+
+（1）`ucore`能做到给每个新`fork`的线程一个唯一的`id`
+
+（2）`uCore`平台代码中通过`get_pid()`函数来实现分配唯一的`pid`：
+
+* `last_pid`初始为1，`next_pid`设置为`MAX_PID`，这两个变量表示进程号序列的区间范围
+* 遍历进程列表，执行以下操作：
+  * 如果`pid == last_pid`，那么`last_pid++`
+  * `pid`在`last_pid`和`next`之间，那么将`next = pid`
+  * 如果`last_pid++`后比`next`大，那么将`next = MAX_PID`，`last_pid`不变，继续从头开始遍历
+
+~~~c
+// get_pid - alloc a unique pid for process
+static int
+get_pid(void) {
+    static_assert(MAX_PID > MAX_PROCESS);
+    struct proc_struct *proc;
+    list_entry_t *list = &proc_list, *le;
+    static int next_safe = MAX_PID, last_pid = MAX_PID;
+    if (++ last_pid >= MAX_PID) {
+        last_pid = 1;
+        goto inside;
+    }
+    if (last_pid >= next_safe) {
+    inside:
+        next_safe = MAX_PID;
+    repeat:
+        le = list;
+        while ((le = list_next(le)) != list) {
+            proc = le2proc(le, list_link);
+            if (proc->pid == last_pid) {
+                if (++ last_pid >= next_safe) {
+                    if (last_pid >= MAX_PID) {
+                        last_pid = 1;
+                    }
+                    next_safe = MAX_PID;
+                    goto repeat;
+                }
+            }
+            else if (proc->pid > last_pid && next_safe > proc->pid) {
+                next_safe = proc->pid;
+            }
+        }
+    }
+    return last_pid;
+}
+~~~
+
+* 每次调用`get_pid`时，除了确定一个可以分配的`PID`外，还需要确定`next_safe`来实现均摊以此优化时间复杂度，`PID`的确定过程中会检查所有进程的`PID`来确保`PID`是唯一的。
+
+
+
+
+
