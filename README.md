@@ -10,3 +10,5 @@
 嵇天颖-2016010308-lab[4]-[2018/4/20/-14:04:00]-[40d34732da5f7a38a4b70a107cb3d25066dfb164]-[lab4 codes and rep complished]
 
 嵇天颖-2016010308-lab[5]-[2018/4/20/-20:52:00]-[33db92cd8fb566fad89fc2620c0f16b83f355e2b]-[lab5 is complished]
+
+嵇天颖-2016010308-lab[6]-[2018/5/01/-13:03:00]-[1a690956d07ab1fa4b52f2d310a885b3fd4bf3cf]-[lab6 is complish`]
