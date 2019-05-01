@@ -210,13 +210,45 @@ extern struct sched_class default_sched_class;
 
 ### 练习2：实现 Stride Scheduling 调度算法
 
+> 首先需要换掉RR调度器的实现，即用`default_sched_stride_c`覆盖`default_sched.c`。然后根据此文件和后续文档对`Stride`度器的相关描述，完成`Stride`调度算法的实现。
 
+#### Stride Scheduling 调度算法分析
+
+**(1)原理**
+
+`Stride Scheduling`算法用一个小顶堆选择即将调入`CPU`执行的进程。初始化时，将堆设为空，进程数为0。出现新建进程时，将进程加入堆，并设置时间片和指向堆的指针，增加进程计数。当一个进程执行完毕后将其从堆中移除并减少进程计数。当需要调度时，从堆顶取出当前`stride`值最小的进程调入`CPU`执行，并将其`stride`增加`pass`大小，如果堆顶为空，则返回空指针。产生时钟中断的处理与其他调度算法相同，减少当前进程的执行时间，若剩余时间为0则进行调度。
+
+**（2）实现工作**
+
+将```default_sched_stride_c```覆盖```default_sched.c```后，需要编写的就是几个函数
+
+~~~c
+stride_init();
+stride_enqueue();
+stride_dequeue();
+stride_pick_next();
+stride_proc_tick();
+~~~
+
+即为初始化，入队，出队，返回运行队列中下一个可执行的进程，更新调度器时钟五个操作函数
+
+
+
+#### 具体实现过程与分析
+
+设置` BIG_STRIDE`为`0x7FFFFFFF`
 
 ~~~c
 #define BIG_STRIDE   0x7FFFFFFF /* you should give a value, and is ??? */
 ~~~
 
+**（1）初始化函数stride_init**
 
+需要对几个变量初始化（根据注释来填写）：
+
+* 初始化调度器类的信息
+* 初始化当前的运行队列为一个空的容器结构
+* 将进程数目初始化为0
 
 ~~~c
 static void
@@ -234,20 +266,19 @@ stride_init(struct run_queue *rq) {
 
 
 
+**（2）进程入队函数stride_enqueue**
 
+需要把当前的进程添加到斜堆当中，使用```skew_heap```提供的工具函数```skew_heap_insert```。斜堆中使用的比较函数为```proc_stride_comp_f```，这里使得每次从堆中取出的一定是`stride`最小的进程。
+
+- 将进程插入到优先队列中；
+- 更新进程的剩余时间片；
+- 设置进程的队列指针；
+- 增加进程计数值
 
 ~~~c
 static void
 stride_enqueue(struct run_queue *rq, struct proc_struct *proc) {
-     /* LAB6: 2016010308 
-      * (1) insert the proc into rq correctly
-      * NOTICE: you can use skew_heap or list. Important functions
-      *         skew_heap_insert: insert a entry into skew_heap
-      *         list_add_before: insert  a entry into the last of list   
-      * (2) recalculate proc->time_slice
-      * (3) set proc->rq pointer to rq
-      * (4) increase rq->proc_num
-      */
+     /* LAB6: 2016010308 */
      rq->lab6_run_pool = skew_heap_insert(rq->lab6_run_pool, &(proc->lab6_run_pool),
                proc_stride_comp_f);
      // Clamp time_slice to be valid value
@@ -261,15 +292,15 @@ stride_enqueue(struct run_queue *rq, struct proc_struct *proc) {
 
 
 
+**（3）进程出队函数stride_dequeue**
+
+- 将进程从优先队列中删除
+- 将进程计数值减一
+
 ~~~c
 static void
 stride_dequeue(struct run_queue *rq, struct proc_struct *proc) {
-     /* LAB6: 2016010308 
-      * (1) remove the proc from rq correctly
-      * NOTICE: you can use skew_heap or list. Important functions
-      *         skew_heap_remove: remove a entry from skew_heap
-      *         list_del_init: remove a entry from the  list
-      */
+     /* LAB6: 2016010308 */
       rq->lab6_run_pool = skew_heap_remove(rq->lab6_run_pool, &(proc->lab6_run_pool),
                proc_stride_comp_f);
       rq->proc_num -= 1;
@@ -278,16 +309,18 @@ stride_dequeue(struct run_queue *rq, struct proc_struct *proc) {
 
 
 
+**(4) 返回运行队列中下一个可执行的进程函数stride_pick_next**
+
+扫描整个运行队列，返回其中`stride`值最小的对应进程。更新对应进程的`stride`值，即`pass = BIG_STRIDE / P->priority; P->stride += pass`。
+
+- 如果队列为空，返回空指针；
+- 从优先队列中获得一个进程（就是指针所指的进程控制块）；
+- 更新`stride`值。
+
 ~~~c
 static struct proc_struct *
 stride_pick_next(struct run_queue *rq) {
-     /* LAB6: 2016010308 
-      * (1) get a  proc_struct pointer p  with the minimum value of stride
-             (1.1) If using skew_heap, we can use le2proc get the p from rq->lab6_run_poll
-             (1.2) If using list, we have to search list to find the p with minimum stride value
-      * (2) update p;s stride value: p->lab6_stride
-      * (3) return p
-      */
+     /* LAB6: 2016010308 */
   	 if (rq->lab6_run_pool == NULL) return NULL;
      struct proc_struct* min_proc = le2proc(rq->lab6_run_pool, lab6_run_pool);
      if (min_proc->lab6_priority == 0) {
@@ -303,6 +336,12 @@ stride_pick_next(struct run_queue *rq) {
 
 
 
+**(5)更新调度器时钟函数stride_proc_tick**
+
+检测当前进程是否已用完分配的时间片。如果时间片用完，应该正确设置进程结构的相关标记来引起进程切换。一个 `process` 最多可以连续运行 `rq.max_time_slice`个时间片。
+
+此函数与`RR`调度算法实现一致。
+
 ~~~c
 static void
 stride_proc_tick(struct run_queue *rq, struct proc_struct *proc) {
@@ -311,4 +350,58 @@ stride_proc_tick(struct run_queue *rq, struct proc_struct *proc) {
     if(proc->time_slice == 0) proc->need_resched = 1;
 }
 ~~~
+
+---
+
+
+
+### 与参考答案的区别
+
+应该是有区别的，尝试运行参考答案发现参考答案`make grade`不通过后就没有细看参考答案。好在我们的平台提供的注释非常贴心，就完全翻译注释法来写代码，和注释步骤保持了高度一致。我的`make grade`是都通过的。
+
+---
+
+
+
+### 运行结果
+
+执行`make grade`，所有的测例均通过。`make run_priority`与附件中提供的输出也一致。
+
+![](./figs/make2.png)
+
+
+
+---
+
+
+
+### 知识点列写
+
+#### （1）实验中重要的OS知识点
+
+- 进程调度实现
+  * 内核抢占点
+  * 进程切换过程
+- RR算法：
+  * RR调度算法的调度思想 是让所有runnable态的进程分时轮流使用CPU时间。RR调度器维护当前runnable进程的有序运行队列。
+- Stride算法
+  * round-robin 调度器，在假设所有进程都充分使用了其拥有的 CPU 时间资源的情况下，所有进程得到的 CPU 时间应该是相等的。
+  * 但是有时候我们希望调度器能够更智能地为每个进程分配合理的 CPU 资源。假设我们为不同的进程分配不同的优先级，则我们有可能希望每个进程得到的时间资源与他们的优先级成正比关系。Stride调度是基于这种想法的一个较为典型和简单的算法。除了简单易于实现以外，它还有如下的特点：
+    * 可控性：如我们之前所希望的，可以证明 Stride Scheduling对进程的调度次数正比于其优先级。
+    * 确定性：在不考虑计时器事件的情况下，整个调度机制都是可预知和重现的。
+- 调度准则
+
+#### （2）而OS原理中很重要，但在实验中没有对应上的知识点有
+
+- FCFS算法、短进程优先算法等
+- 实时调度和多处理器调度
+- 优先级反置
+
+
+
+
+
+
+
+
 
