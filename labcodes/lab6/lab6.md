@@ -10,6 +10,51 @@
 
 > 本实验依赖实验`1/2/3/4/5`。请把你做的实验`2/3/4/5`的代码填入本实验中代码中有`“LAB1”/“LAB2”/“LAB3”/“LAB4”“LAB5”`的注释相应部分。并确保编译通过。注意：为了能够正确执行`lab6`的测试应用程序，可能需对已完成的实验`1/2/3/4/5`的代码进行进一步改进。
 
+~~~c
+struct run_queue *rq;              // running queue contains Process
+list_entry_t run_link;             // the entry linked in run queue
+int time_slice;                    // time slice for occupying the CPU
+skew_heap_entry_t lab6_run_pool;   // FOR LAB6 ONLY: the entry in the run pool
+uint32_t lab6_stride;              // FOR LAB6 ONLY: the current stride of the process
+uint32_t lab6_priority;       	   // FOR LAB6 ONLY: the priority of process, set by 									   lab6_set_priority(uint32_t)
+~~~
+
+
+
+
+
+~~~c
+proc->rq = NULL;
+list_init(&(proc->run_link));
+proc->time_slice = 0;
+proc->lab6_run_pool.left=proc->lab6_run_pool.right=proc->lab6_run_pool.parent=NULL;
+proc->lab6_stride = 0;
+proc->lab6_priority = 0;
+~~~
+
+
+
+~~~c
+ticks++;
+        if (ticks % TICK_NUM == 0) {
+            //print_ticks();
+            // assert(current != NULL);
+            // current->need_resched = 1;
+        }
+        /* LAB5 2016010308 */
+        /* you should upate you lab1 code (just add ONE or TWO lines of code):
+         *    Every TICK_NUM cycle, you should set current process's current->need_resched = 1
+         */
+        /* LAB6 2016010308 */
+        /* you should upate you lab5 code
+         * IMPORTANT FUNCTIONS:
+	     * sched_class_proc_tick
+         */
+        sched_class_proc_tick(current);
+~~~
+
+
+
 
 
 
