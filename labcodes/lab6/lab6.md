@@ -10,18 +10,20 @@
 
 > 本实验依赖实验`1/2/3/4/5`。请把你做的实验`2/3/4/5`的代码填入本实验中代码中有`“LAB1”/“LAB2”/“LAB3”/“LAB4”“LAB5”`的注释相应部分。并确保编译通过。注意：为了能够正确执行`lab6`的测试应用程序，可能需对已完成的实验`1/2/3/4/5`的代码进行进一步改进。
 
+#### 修改`proc.c`
+
+为了实现调度器算法，在`LAB6`中`proc_struct`中添加了与进程调度相关的几个字段：
+
 ~~~c
-struct run_queue *rq;              // running queue contains Process
-list_entry_t run_link;             // the entry linked in run queue
-int time_slice;                    // time slice for occupying the CPU
-skew_heap_entry_t lab6_run_pool;   // FOR LAB6 ONLY: the entry in the run pool
-uint32_t lab6_stride;              // FOR LAB6 ONLY: the current stride of the process
-uint32_t lab6_priority;       	   // FOR LAB6 ONLY: the priority of process, set by 									   lab6_set_priority(uint32_t)
+struct run_queue *rq;              // 运行队列
+list_entry_t run_link;             // 该进程的调度链表结构，该结构内部的连接组成了运行队列列表
+int time_slice;                    // 该进程剩余的时间片，只对当前进程有效
+skew_heap_entry_t lab6_run_pool;   // 该进程在优先队列中的节点
+uint32_t lab6_stride;              // 该进程的调度优先级
+uint32_t lab6_priority;       	   // 该进程的调度步进值
 ~~~
 
-
-
-
+因此我们需要在```alloc_proc```中对这几个新的字段进行初始化：
 
 ~~~c
 proc->rq = NULL;
@@ -34,32 +36,24 @@ proc->lab6_priority = 0;
 
 
 
+#### 修改`trap.c`
+
+在每个时钟中断的时候需要给调度器通知，以更新各种相关的数据。
+
+因此我们在```trap_dispatch```函数中的`case IRQ_OFFSET + IRQ_TIMER:`分支中添加下面一句：
+
 ~~~c
 ticks++;
         if (ticks % TICK_NUM == 0) {
-            //print_ticks();
-            // assert(current != NULL);
-            // current->need_resched = 1;
         }
-        /* LAB5 2016010308 */
-        /* you should upate you lab1 code (just add ONE or TWO lines of code):
-         *    Every TICK_NUM cycle, you should set current process's current->need_resched = 1
-         */
-        /* LAB6 2016010308 */
-        /* you should upate you lab5 code
-         * IMPORTANT FUNCTIONS:
-	     * sched_class_proc_tick
-         */
         sched_class_proc_tick(current);
 ~~~
 
+---
 
 
 
-
-
-
-### 练习1：使用 Round Robin 调度算法（不需要编码）
+### 练习1：使用 Round Robin 调度算法
 
 > 完成练习0后，建议大家比较一下（可用`kdiff3`等文件比较软件）个人完成的`lab5`和练习0完成后的刚修改的`lab6`之间的区别，分析了解`lab6`采用`RR`调度算法后的执行过程。执行`make grade`，大部分测试用例应该通过。但执行`priority.c`应该过不去。
 
@@ -77,7 +71,7 @@ ticks++;
 
 
 
-### 练习2：
+### 练习2：实现 Stride Scheduling 调度算法
 
 
 
