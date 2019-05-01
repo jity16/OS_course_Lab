@@ -55,19 +55,156 @@ ticks++;
 
 ### 练习1：使用 Round Robin 调度算法
 
-> 完成练习0后，建议大家比较一下（可用`kdiff3`等文件比较软件）个人完成的`lab5`和练习0完成后的刚修改的`lab6`之间的区别，分析了解`lab6`采用`RR`调度算法后的执行过程。执行`make grade`，大部分测试用例应该通过。但执行`priority.c`应该过不去。
+> 完成练习0后，建议大家比较一下（可用`kdiff3`等文件比较软件）个人完成的`lab5`和练习0完成后的刚修改的`lab6`之间的区别，分析了解`lab6`采用`RR`调度算法后的执行过程。
+
+#### 【练习1.1】
+
+> 执行`make grade`，大部分测试用例应该通过。但执行`priority.c`应该过不去。
+
+执行`make grade`结果如下图所示，除`priority`均通过
+
+![](./figs/make1.png)
 
 
+
+#### 【练习1.2】
 
 > 请理解并分析`sched_class`中各个函数指针的用法，并结合`Round Robin `调度算法描`ucore`的调度执行过程
+
+**(1)理解并分析`sched_class`中各个函数指针的用法**
+
+为了保证调度器接口的通用性，`ucore`调度框架定义了如下接口`sched_class`，该接口中，几乎所有成员变量均为函数指针。我们首先观察`sched_class`结构体定义：
+
+~~~c
+struct sched_class {
+    // 调度器的名字
+    const char *name;
+    // 初始化运行队列
+    void (*init)(struct run_queue *rq);
+    // 将进程p插入队列rq
+    void (*enqueue)(struct run_queue *rq, struct proc_struct *proc);
+    // 将进程p从队列rq中删除
+    void (*dequeue)(struct run_queue *rq, struct proc_struct *proc);
+    // 返回运行队列中下一个可执行的进程
+    struct proc_struct *(*pick_next)(struct run_queue *rq);
+    // timetick处理函数
+    void (*proc_tick)(struct run_queue *rq, struct proc_struct *proc);
+};
+~~~
+
+**调度器初始化`void (*init)(struct run_queue *rq)`**
+
+调度初始化函数`sched_init`，需要内核初始化过程中调用这个函数，这个函数负责选择调度器并且对选择的调度器进行初始化。
+
+**将进程加入调度器`void (*enqueue)(struct run_queue *rq, struct proc_struct *proc)`**
+
+当进程被唤醒后，需要调用`sched_class_enqueue`将其加入到调度器中。
+
+**进程调度**
+
+调度函数`schedule`变化如下：
+
+- 在切换进程之前调用`sched_class_enqueue`将当前进程加入到RR的调度链表中；
+- 调用`sched_class_pick_next`获取RR算法选取的下一个进程；
+- 调用`sched_class_dequeue`将即将运行的进程从RR算法调度链表中删除。
+
+**调度器时钟更新`void (*proc_tick)(struct run_queue *rq, struct proc_struct *proc)`**
+
+时间片用完，调用`sched_class_proc_tick`更新调度器中的时钟。
+
+
+
+由此我们得知：
+
+`schedule`函数完成了与调度框架和调度算法相关三件事情:把当前继续占用`CPU`执行的运行进程放放入到就绪进程队列中，从就绪进程队列中选择一个“合适”就绪进程，把这个“合适”的就绪进程从就绪进程队列中摘除。
+
+通过调用三个调度类接口函数`sched_class_enqueue、sched_class_pick_next、sched_class_enqueue`来使得完成这三件事情与具体的调度算法无关。
+
+`run_timer_list`函数在每次`timer`中断处理过程中被调用，从而可用来调用调度算法所需的`timer`时间事件感知操作，调整相关进程的进程调度相关的属性值。通过调用调度类接口函数`sched_class_proc_tick`使得此操作与具体调度算法无关。
+
+
+
+**(2)结合`Round Robin `调度算法描`ucore`的调度执行过程**
+
+**Round Robin 调度算法**
+
+`RR`调度算法的调度思想 是让所有`runnable`态的进程分时轮流使用CPU时间。RR调度器维护当前`runnable`进程的有序运行队列。当前进程的时间片用完之后，调度器将当前进程放置到运行队列的尾部，再从其头部取出进程进行调度。RR调度算法的就绪队列在组织结构上也是一个双向链表，只是增加了一个成员变量，表明在此就绪进程队列中的最大执行时间片。而且在进程控制块`proc_struct`中增加了一个成员变量`time_slice`，用来记录进程当前的可运行时间片段。
+
+在每个`timer`到时的时候，操作系统会递减当前执行进程的`time_slice`，当`time_slice`为`0`时，就意味着这个进程运行了一段时间（这个时间片段称为进程的时间片），需要把CPU让给其他进程执行，于是操作系统就需要让此进程重新回到`rq`的队列尾，且重置此进程的时间片为就绪队列的成员变量最大时间片`max_time_slice`值，然后再从`rq`的队列头取出一个新的进程执行。
+
+
+
+**具体分析**
+
+**（1）分析`RR`与`sched_class`的调用关系**
+
+在实现Round Robin算法的```default_sched.c```中，有如下：
+
+~~~c
+struct sched_class default_sched_class = {
+    .name = "RR_scheduler",
+    .init = RR_init,
+    .enqueue = RR_enqueue,
+    .dequeue = RR_dequeue,
+    .pick_next = RR_pick_next,
+    .proc_tick = RR_proc_tick,
+};
+~~~
+
+在```default_sched.h```中定义了
+
+~~~c
+extern struct sched_class default_sched_class;
+~~~
+
+因此`sched.c`中就可以使用`sched_class`来调用RR算法的功能。
+
+我们已经知道`sched_class`通用的接口：初始化、入队列，出队列，获取队首，时钟事件。
+
+这里实现的`RR`算法维护了一个就绪进程的队列。每次进行调度的时候，把当前进程（如果还是处于就绪）加入到队列的末尾，然后取出该队列头部的进程（同时从队列中删除），选择其调度执行。如果队列中没有可调度的进程，就选取`idleproc`运行。`wakeup_proc`函数中，也直接将要唤醒的那个进程加入就绪队列的末尾。
+
+**（2）调度节点**
+
+分析uCore的进程调度点，大致分为如下调度点：
+
+- `do_exit`, `do_wait`, `init_main`, `cpu_idle`, `lock`中调用`schedule`函数时由于要执行等待操作或退出操作，如果不放弃CPU使用权是对资源的浪费，属于主动放弃CPU使用权，不涉及调度器规则中的打断；
+- `trap`函数中，首先要判断是否中断处于用户态，如果处于用户态且已经被标记为需要调度，则该进程会被主动打断，至于何时被标记需要调度，一部分取决于调度器的设计。
 
 
 
 > 请在实验报告中简要说明如何设计实现”多级反馈队列调度算法“，给出概要设计，鼓励给出详细设计
 
+**数据结构**
 
+* 首先需要在运行队列`run_queue`中增加多个队列，比如可以用数组实现：
 
+  ~~~c
+  list_entry_t multi_run_list[MULTI_QUEUE_NUM];	//多级队列
+  ~~~
 
+* 由于有多个队列，所以我们要增加进程的队列号来进行优先级管理：
+
+  ~~~c
+  int multi_level;      //在 proc_struct 中增加进程的队列号                    
+  ~~~
+
+**算法分析**
+
+同样的，我们要实现类似于`sched_class`中各个指针函数的功能：
+
+* 初始化所有的运行队列`init`
+* 将进程入队`enqueue`：需要根据进程的优先级判断应该加入哪个队列
+  - 若进程上一个时间片用完了，降低优先级
+  - 将进程加入优先级对应的队列
+  - 设置该优先级对应的时间片
+  - 增加计数值
+
+* 将进程出队`dequeue`: 从优先级高的队列开始查找，如果为空就往下查找优先级低一级的进程。根据`proc`中保存的信息找到对应的队列进行删除
+* 返回运行队列中下一个可执行的进程`pick_next`:按照优先级顺序检查每个队列，如果队列存在进程，那么选择这个进程
+* 调度器时钟更新`proc_tick`: 和RR算法一致
+* 时间片`time_slice`: 为了实现多种不同的时间片大小，应该在入队的时候给不同优先级的进程设置不同大小的`time_slice`
+
+---
 
 
 
