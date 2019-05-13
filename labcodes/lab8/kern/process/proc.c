@@ -142,7 +142,8 @@ alloc_proc(void) {
       proc->lab6_run_pool.left=proc->lab6_run_pool.right=proc->lab6_run_pool.parent=NULL;
       proc->lab6_stride = 0;
       proc->lab6_priority = 0;
-    //LAB8:EXERCISE2 YOUR CODE HINT:need add some code to init fs in proc_struct, ...
+    //LAB8:EXERCISE2 2016010308 HINT:need add some code to init fs in proc_struct, ...
+      proc->filesp = NULL;
     }
     return proc;
 }
@@ -448,7 +449,7 @@ do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf) {
     }
     ret = -E_NO_MEM;
     //LAB4:EXERCISE2 2016010308
-    //LAB8:EXERCISE2 YOUR CODE  HINT:how to copy the fs in parent's proc_struct?
+    //LAB8:EXERCISE2 2016010308  HINT:how to copy the fs in parent's proc_struct?
     /*
      * Some Useful MACROs, Functions and DEFINEs, you can use them in below implementation.
      * MACROs or Functions:
@@ -489,6 +490,9 @@ do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf) {
     assert(current->wait_state == 0); 
     if (setup_kstack(proc) != 0) {
       goto bad_fork_cleanup_proc;
+    }
+    if (copy_files(clone_flags, proc) != 0) {
+        goto bad_fork_cleanup_fs;
     }
     if (copy_mm(clone_flags, proc) != 0) {
       goto bad_fork_cleanup_kstack;
