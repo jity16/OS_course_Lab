@@ -628,7 +628,7 @@ load_icode(int fd, int argc, char **kargv) {
      * (7) setup trapframe for user environment
      * (8) if up steps failed, you should cleanup the env.
      */
-   // assert(argc >= 0 && argc <= EXEC_MAX_ARG_NUM);
+    assert(argc >= 0 && argc <= EXEC_MAX_ARG_NUM);
 
     if (current->mm != NULL) {
         panic("load_icode: current->mm must be empty.\n");
