@@ -12,7 +12,7 @@
  *  Please refer to Page 196~198, Section 8.2 of Yan Wei Min's Chinese book
  * "Data Structure -- C programming language".
 */
-// LAB2 EXERCISE 1: YOUR CODE
+// LAB2 EXERCISE 1: 2016010308
 // you should rewrite functions: `default_init`, `default_init_memmap`,
 // `default_alloc_pages`, `default_free_pages`.
 /*
@@ -127,6 +127,7 @@ default_alloc_pages(size_t n) {
     }
     struct Page *page = NULL;
     list_entry_t *le = &free_list;
+    //(1)find the first block no shorter than n
     while ((le = list_next(le)) != &free_list) {
         struct Page *p = le2page(le, page_link);
         if (p->property >= n) {
@@ -134,13 +135,19 @@ default_alloc_pages(size_t n) {
             break;
         }
     }
+    //(2)if we can find the suitable block
+    //* if its length > n, re-calculate number of the rest pages of this free block. 
+    //* Re-caluclate `nr_free`
     if (page != NULL) {
-        list_del(&(page->page_link));
+        //list_del(&(page->page_link));
         if (page->property > n) {
             struct Page *p = page + n;
             p->property = page->property - n;
-            list_add(&free_list, &(p->page_link));
+            SetPageProperty(p); //some property may change
+            //list_add(&free_list, &(p->page_link));
+            list_add_after(&(page->page_link), &(p->page_link));
     }
+        list_del(&(page->page_link)); //delete the page_link
         nr_free -= n;
         ClearPageProperty(page);
     }
@@ -151,31 +158,44 @@ static void
 default_free_pages(struct Page *base, size_t n) {
     assert(n > 0);
     struct Page *p = base;
+    // check page property of each block
     for (; p != base + n; p ++) {
         assert(!PageReserved(p) && !PageProperty(p));
         p->flags = 0;
         set_page_ref(p, 0);
     }
+    // set the size of free area and page property
     base->property = n;
     SetPageProperty(base);
+
+    // find the place to insert
     list_entry_t *le = list_next(&free_list);
+    list_entry_t *prev = &free_list;   
     while (le != &free_list) {
         p = le2page(le, page_link);
+        if (base < p) {
+            break;
+        }
+        prev = le;
         le = list_next(le);
-        if (base + base->property == p) {
-            base->property += p->property;
-            ClearPageProperty(p);
-            list_del(&(p->page_link));
-        }
-        else if (p + p->property == base) {
-            p->property += base->property;
-            ClearPageProperty(base);
-            base = p;
-            list_del(&(p->page_link));
-        }
+    }
+    // check wether can merge with block before
+    p = le2page(prev, page_link);
+    if (prev != &free_list && p + p -> property == base) {
+        p -> property += base -> property;
+        ClearPageProperty(base);
+    } else {
+        list_add_after(prev, &(base -> page_link));
+        p = base;
+    }
+    // check wether can merge with block behind
+    struct Page *nextp = le2page(le, page_link);
+    if (le != &free_list && p + p -> property == nextp) {
+        p -> property += nextp -> property;
+        ClearPageProperty(nextp);
+        list_del(le);
     }
     nr_free += n;
-    list_add(&free_list, &(base->page_link));
 }
 
 static size_t
