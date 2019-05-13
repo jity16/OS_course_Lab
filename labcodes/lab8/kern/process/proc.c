@@ -788,9 +788,17 @@ load_icode(int fd, int argc, char **kargv) {
     //(6) setup trapframe for user environment
     struct trapframe *tf = current->tf;
     memset(tf, 0, sizeof(struct trapframe));
+
+
+    char **arg = (char **)(USTACKTOP -sizeof(char*)*(argc+1));
+    arg[0] = argc;
+    for(int i = 1; i <argc; i ++){
+      arg[i] = kargv[i];
+    }
+
     tf->tf_cs = USER_CS;
     tf->tf_ds = tf->tf_es = tf->tf_ss = USER_DS;
-    tf->tf_esp = (uintptr_t)arg//stacktop;
+    tf->tf_esp = (uintptr_t)arg;//stacktop;
     tf->tf_eip = elf->e_entry;
     tf->tf_eflags = FL_IF;
     ret = 0;
