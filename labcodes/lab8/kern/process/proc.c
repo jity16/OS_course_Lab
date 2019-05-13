@@ -662,9 +662,9 @@ load_icode(int fd, int argc, char **kargv) {
     uint32_t vm_flags, perm, phnum;
 
     struct proghdr *ph_end = ph + elf->e_phnum;
-    //for (phnum = 0; phnum < elf->e_phnum; phnum ++) {
-    phnum = 0;
-    while(phnum < elf->e_phnum)
+    for (phnum = 0; phnum < elf->e_phnum; phnum ++) {
+    //phnum = 0;
+    //while(phnum < elf->e_phnum)
     {
         //(3.4) find every program section headers
         off_t phoff = elf->e_phoff + sizeof(struct proghdr) * phnum;
@@ -741,7 +741,7 @@ load_icode(int fd, int argc, char **kargv) {
             memset(page2kva(page) + off, 0, size);
             start += size;
         }
-        phnum ++;
+        //phnum ++;
     }
     sysfile_close(fd);
     
@@ -763,23 +763,23 @@ load_icode(int fd, int argc, char **kargv) {
 
     //setup argc, argv
     uint32_t argv_size=0, i;
-    //for (i = 0; i < argc; i ++) {
-    i = 0;
-    while(i <argc){
+    for (i = 0; i < argc; i ++) {
+    //i = 0;
+    //while(i <argc){
         argv_size += strnlen(kargv[i],EXEC_MAX_ARG_LEN + 1)+1;
-        i ++;
+        //i ++;
     }
 
     uintptr_t stacktop = USTACKTOP - (argv_size/sizeof(long)+1)*sizeof(long);
     char** uargv=(char **)(stacktop  - argc * sizeof(char *));
     
     argv_size = 0;
-    i = 0;
-    while(i < argc){
-    //for (i = 0; i < argc; i ++) {
+    // i = 0;
+    // while(i < argc){
+    for (i = 0; i < argc; i ++) {
         uargv[i] = strcpy((char *)(stacktop + argv_size ), kargv[i]);
         argv_size +=  strnlen(kargv[i],EXEC_MAX_ARG_LEN + 1)+1;
-        i ++;
+       // i ++;
     }
     
     stacktop = (uintptr_t)uargv - sizeof(int);
