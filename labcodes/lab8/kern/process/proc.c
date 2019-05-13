@@ -792,9 +792,12 @@ load_icode(int fd, int argc, char **kargv) {
 
     char **arg = (char **)(USTACKTOP -sizeof(char*)*(argc+1));
     arg[0] = argc;
-    for(int i = 1; i <argc; i ++){
+    int i = 1;
+    while(i <=argc){
       arg[i] = kargv[i];
+      i ++;
     }
+    
 
     tf->tf_cs = USER_CS;
     tf->tf_ds = tf->tf_es = tf->tf_ss = USER_DS;
