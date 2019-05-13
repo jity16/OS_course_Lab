@@ -665,7 +665,7 @@ load_icode(int fd, int argc, char **kargv) {
     for (phnum = 0; phnum < elf->e_phnum; phnum ++) {
     //phnum = 0;
     //while(phnum < elf->e_phnum)
-    {
+   // {
         //(3.4) find every program section headers
         off_t phoff = elf->e_phoff + sizeof(struct proghdr) * phnum;
         if ((ret = load_icode_read(fd, ph, sizeof(struct proghdr), phoff)) != 0) {
