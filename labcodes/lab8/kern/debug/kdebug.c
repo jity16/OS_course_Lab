@@ -335,7 +335,7 @@ read_eip(void) {
  * */
 void
 print_stackframe(void) {
-     /* LAB1 YOUR CODE : STEP 1 */
+     /* LAB1 2016010308 : STEP 1 */
      /* (1) call read_ebp() to get the value of ebp. the type is (uint32_t);
       * (2) call read_eip() to get the value of eip. the type is (uint32_t);
       * (3) from 0 .. STACKFRAME_DEPTH
@@ -347,5 +347,23 @@ print_stackframe(void) {
       *           NOTICE: the calling funciton's return addr eip  = ss:[ebp+4]
       *                   the calling funciton's ebp = ss:[ebp]
       */
+    uint32_t ebp = read_ebp(); //(1) call read_ebp() to get the value of ebp. the type is (uint32_t);
+    uint32_t eip = read_eip(); //(2) call read_eip() to get the value of eip. the type is (uint32_t);
+
+    int i = 0;
+    while(ebp != 0 && i < STACKFRAME_DEPTH) {   // (3) from 0 .. STACKFRAME_DEPTH
+        cprintf("ebp:0x%08x eip:0x%08x args:", ebp, eip);       //(3.1) printf value of ebp, eip
+        uint32_t *args = (uint32_t *)ebp + 2;      // (3.2) (uint32_t)calling arguments [0..4] = the contents in address (uint32_t)ebp +2 [0..4]                           
+        int j = 0;
+        while(j < 4){           
+            cprintf("0x%08x ", args[j]);
+            j ++;
+        }
+        cprintf("\n");      //(3.3) cprintf("\n");
+        print_debuginfo(eip - 1);//(3.4) call print_debuginfo(eip-1) to print the C calling function name and line number, etc.
+        eip = ((uint32_t *)ebp)[1]; //(3.5) popup a calling stackframe
+        ebp = ((uint32_t *)ebp)[0]; 
+        i++;
+    }
 }
 
