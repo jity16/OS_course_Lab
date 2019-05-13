@@ -491,11 +491,11 @@ do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf) {
     if (setup_kstack(proc) != 0) {
       goto bad_fork_cleanup_proc;
     }
-    if (copy_mm(clone_flags, proc) != 0) {
-      goto bad_fork_cleanup_kstack;
-    }
     if (copy_files(clone_flags, proc) != 0) {
         goto bad_fork_cleanup_fs;
+    }
+    if (copy_mm(clone_flags, proc) != 0) {
+      goto bad_fork_cleanup_kstack;
     }
 
     // Copy parent's trapframe
@@ -788,20 +788,9 @@ load_icode(int fd, int argc, char **kargv) {
     //(6) setup trapframe for user environment
     struct trapframe *tf = current->tf;
     memset(tf, 0, sizeof(struct trapframe));
-
-
-    char **arg = (char **)(USTACKTOP -sizeof(char*)*(argc+1));
-    arg[0] = argc;
-    int i = 1;
-    while(i <=argc){
-      arg[i] = kargv[i];
-      i ++;
-    }
-    
-
     tf->tf_cs = USER_CS;
     tf->tf_ds = tf->tf_es = tf->tf_ss = USER_DS;
-    tf->tf_esp = (uintptr_t)arg;//stacktop;
+    tf->tf_esp = stacktop;
     tf->tf_eip = elf->e_entry;
     tf->tf_eflags = FL_IF;
     ret = 0;
