@@ -783,7 +783,7 @@ load_icode(int fd, int argc, char **kargv) {
     memset(tf, 0, sizeof(struct trapframe));
     tf->tf_cs = USER_CS;
     tf->tf_ds = tf->tf_es = tf->tf_ss = USER_DS;
-    tf->tf_esp = stacktop-16;
+    tf->tf_esp = stacktop;
     tf->tf_eip = elf->e_entry;
     tf->tf_eflags = FL_IF;
     ret = 0;
