@@ -216,3 +216,111 @@ bool try_down(semaphore_t *sem);
 **自旋锁**：我们可以借助`CPU`提供的原子指令实现自旋锁。设置一个位变量用来标识一个锁，然后通过`CPU`提供的原子指令，保证获取这个锁的进程才能进入临界区进行信号量的相关操作。
 
 **区别**：用户态和内核态实现信号量的区别主要在于控制临界区访问的方法的不同。
+
+
+
+---
+
+### 练习2: 完成内核级条件变量和基于内核级条件变量的哲学家就餐问题（需要编码）
+
+> 首先掌握管程机制，然后基于信号量实现完成条件变量实现，然后用管程机制实现哲学家就餐问题的解决方案（基于条件变量）。
+
+
+
+> 请在实验报告中给出内核级条件变量的设计描述，并说明其大致执行流程。
+
+~~~c
+void 
+cond_signal (condvar_t *cvp) {
+   //LAB7 EXERCISE1: 2016010308
+   cprintf("cond_signal begin: cvp %x, cvp->count %d, cvp->owner->next_count %d\n", cvp, cvp->count, cvp->owner->next_count);  
+  /*
+   *      cond_signal(cv) {
+   *          if(cv.count>0) {
+   *             mt.next_count ++;
+   *             signal(cv.sem);
+   *             wait(mt.next);
+   *             mt.next_count--;
+   *          }
+   *       }
+   */
+   monitor_t* mtp = cvp->owner;
+   if (cvp-> count > 0){
+        mtp->next_count ++;
+        up(&(cvp->sem));
+        down(&(mtp->next));
+        mtp->next_count --;
+   }
+   cprintf("cond_signal end: cvp %x, cvp->count %d, cvp->owner->next_count %d\n", cvp, cvp->count, cvp->owner->next_count);
+}
+~~~
+
+
+
+
+
+~~~c
+void
+cond_wait (condvar_t *cvp) {
+    //LAB7 EXERCISE1: 2016010308
+    cprintf("cond_wait begin:  cvp %x, cvp->count %d, cvp->owner->next_count %d\n", cvp, cvp->count, cvp->owner->next_count);
+   /*
+    *         cv.count ++;
+    *         if(mt.next_count>0)
+    *            signal(mt.next)
+    *         else
+    *            signal(mt.mutex);
+    *         wait(cv.sem);
+    *         cv.count --;
+    */
+    cvp->count ++;
+    monitor_t* mtp = cvp->owner;
+    if(mtp->next_count > 0){
+       up(&(mtp->next));
+    }else{
+       up(&(mtp->mutex));
+    }
+    down(&(cvp->sem));
+    cvp->count --;
+    cprintf("cond_wait end:  cvp %x, cvp->count %d, cvp->owner->next_count %d\n", cvp, cvp->count, cvp->owner->next_count);
+}
+~~~
+
+
+
+~~~c
+void phi_take_forks_condvar(int i) {
+     down(&(mtp->mutex));
+//--------into routine in monitor--------------
+     // LAB7 EXERCISE1: 2016010308
+     // I am hungry
+     state_condvar[i] = HUNGRY;
+     // try to get fork
+     phi_test_condvar(i);
+     while (state_condvar[i] != EATING) {
+       cond_wait(&(mtp->cv[i]));
+     }
+~~~
+
+
+
+~~~c
+void phi_put_forks_condvar(int i) {
+     down(&(mtp->mutex));
+
+//--------into routine in monitor--------------
+     // LAB7 EXERCISE1: 2016010308
+     // I ate over
+     state_condvar[i]=THINKING;
+     // test left and right neighbors
+     phi_test_condvar(LEFT);
+     phi_test_condvar(RIGHT);
+~~~
+
+
+
+> 请在实验报告中给出给用户态进程/线程提供条件变量机制的设计方案，并比较说明给内核级提供条件变量机制的异同。
+
+
+
+> 请在实验报告中回答：能否不用基于信号量机制来完成条件变量？如果不能，请给出理由，如果能，请给出设计说明和具体实现。
