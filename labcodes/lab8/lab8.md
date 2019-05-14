@@ -389,11 +389,37 @@ struct sfs_disk_entry {
 
 ### 实验结果
 
+**make grade结果**
+
 ![](./figs/makegrade.png)
 
----
 
 
+**进入sh测试**
+
+* `ls`测试
+
+  ![](./figs/ls.png)
+
+
+
+* `hello`测试
+
+  ![](./figs/hello.png)
+
+  
+
+* `forktest`测试
+
+  ![](./figs/forktest.png)
+
+
+
+* 至此，`LAB1`-`LAB8`已经基本完成。根据实验结果知道,`sfs`文件系统基本成功，`Ucore`操作系统基本成功。
+
+
+
+----
 
 ### 与参考答案的区别
 
